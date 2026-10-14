@@ -1,0 +1,54 @@
+{
+  "id": "bk-plugin-map-visualization",
+  "name": "Map Visualization",
+  "author": {
+    "name": "Matthew Rathbone",
+    "url": "https://github.com/rathboma"
+  },
+  "description": "Plot query results on an interactive map: points, bubbles, numbered markers, heatmaps, clusters, paths and filled regions.",
+  "version": "1.0.0",
+  "icon": "map",
+  "manifestVersion": 1,
+  "minAppVersion": "5.5.0",
+  "capabilities": {
+    "views": [
+      {
+        "id": "map-view",
+        "name": "Map",
+        "type": "shell-tab",
+        "entry": "dist/index.html"
+      }
+    ],
+    "menu": [
+      {
+        "command": "new-map",
+        "name": "New Map",
+        "view": "map-view",
+        "placement": ["newTabDropdown", "menubar.tools"]
+      },
+      {
+        "command": "plot-selection",
+        "name": "Plot on Map",
+        "view": "map-view",
+        "placement": [
+          "results.corner.context",
+          "results.columnHeader.context",
+          "tableTable.corner.context",
+          "tableTable.columnHeader.context"
+        ]
+      },
+      {
+        "command": "plot-query",
+        "name": "Plot Query on Map",
+        "view": "map-view",
+        "placement": "editor.query.context"
+      },
+      {
+        "command": "plot-table",
+        "name": "View on Map",
+        "view": "map-view",
+        "placement": "entity.table.context"
+      }
+    ]
+  }
+}
