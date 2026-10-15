@@ -84,9 +84,11 @@ internet connection or any third-party tile server. It has countries, regions, c
 country to metro-area maps; zoomed in to street level it runs out of detail, and the status bar offers an online
 basemap instead.
 
-- **Match app theme** (default) uses the offline map in light or dark.
-- Esri streets, topographic and satellite imagery, OpenStreetMap, OpenTopoMap, or any custom `{z}/{x}/{y}` tile URL.
-- **Country outlines**: the simplest built-in map.
+The basemap list is split into **Built in** maps, which work offline, and **Online** maps, which download tiles from
+a tile server. The selected map is labelled Offline or Online, with the server it uses.
+
+- Built in: **Match app theme** (default) uses the offline map in light or dark; **Country outlines** is the simplest map.
+- Online: Esri streets, topographic and satellite imagery, OpenStreetMap, OpenTopoMap, or any custom `{z}/{x}/{y}` tile URL.
 - Export as **PNG** (map and legend), **copy the image** to the clipboard, or save the plotted rows as **GeoJSON**.
 
 ### More detailed offline maps

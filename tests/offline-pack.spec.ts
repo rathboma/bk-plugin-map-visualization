@@ -2,7 +2,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BlobSource, formatBytes, maxZoomAt, validatePack, type PackInfo } from "../src/lib/pack";
-import { basemapIsDark, resolveBasemap } from "../src/lib/basemaps";
+import { BASEMAP_GROUPS, basemapIsDark, basemapSource, resolveBasemap, tileHost } from "../src/lib/basemaps";
+import { BASEMAP_IDS } from "../src/lib/config";
 
 const packFile = readFileSync(new URL("../basemaps/world.pmtiles", import.meta.url));
 
@@ -73,5 +74,35 @@ describe("basemap resolution with an offline pack", () => {
     expect(basemapIsDark("auto", true, true)).toBe(true);
     expect(basemapIsDark("auto", false, true)).toBe(false);
     expect(basemapIsDark("esri-imagery", false, true)).toBe(true);
+  });
+});
+
+describe("basemap picker", () => {
+  it("lists every basemap once, built-in maps apart from online ones", () => {
+    const ids = BASEMAP_GROUPS.flatMap((g) => g.options.map((o) => o.id));
+    expect([...ids].sort()).toEqual([...BASEMAP_IDS].sort());
+    const [builtIn, online] = BASEMAP_GROUPS.map((g) => g.options.map((o) => o.id));
+    expect(builtIn).toEqual(["auto", "offline-osm", "offline"]);
+    expect(online).toContain("osm");
+    expect(online).toContain("custom");
+  });
+
+  it("says where the drawn map's tiles come from", () => {
+    expect(basemapSource("auto", "", true)).toMatchObject({ online: false });
+    expect(basemapSource("offline", "", false)).toMatchObject({ online: false });
+    // Without the bundled map, "Match app theme" falls back to Esri
+    expect(basemapSource("auto", "", false)).toEqual({
+      online: true,
+      text: "Downloads tiles from server.arcgisonline.com; needs an internet connection.",
+    });
+    expect(basemapSource("opentopo", "", true).text).toContain("tile.opentopomap.org");
+    expect(basemapSource("custom", "https://tiles.example.com/{z}/{x}/{y}.png", true).text).toContain("tiles.example.com");
+    expect(basemapSource("custom", "", true)).toEqual({ online: true, text: "Downloads tiles from the internet." });
+  });
+
+  it("finds the host of a tile URL template", () => {
+    expect(tileHost("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png")).toBe("tile.opentopomap.org");
+    expect(tileHost("http://localhost:8080/{z}/{x}/{y}")).toBe("localhost:8080");
+    expect(tileHost("not a url")).toBeNull();
   });
 });
