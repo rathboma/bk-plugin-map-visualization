@@ -4,7 +4,9 @@ Plot query results on an interactive map, right inside [Beekeeper Studio](https:
 Point it at any result set with coordinates, geometry, or place names and pick how to draw it:
 dots, sized bubbles, numbered markers, clusters, heatmaps, paths, flow lines or filled regions.
 
-![Bubbles sized by population and colored by continent](docs/bubbles.png)
+![Demo: plotting query results as bubbles, a heatmap, clusters, US states, trip lines and GPS paths](docs/demo.gif)
+
+<sub>Sped up 1.6×. [Watch the full-speed video](docs/demo.mp4).</sub>
 
 ## Installing
 
@@ -64,6 +66,8 @@ Projected geometries in other SRIDs are reported with a hint to `ST_Transform(ge
 | **Path** | GPS tracks, routes, ordered visits | One path per group column, ordered by any column (times, sequence numbers) or row order; start / end markers |
 | **Lines** | Origin → destination flows (trips, shipments) | Destination columns, curved or straight, width and color by column |
 | **Filled regions** | Choropleths of countries or US states | Count rows or sum / average / min / max a column; linear, log or quantile color scale |
+
+![Bubbles sized by population and colored by continent](docs/bubbles.png)
 
 Hover a mark for a summary and click it for the full row, with **Show in table** and **Copy as JSON**.
 Legend categories can be clicked to hide them, or Alt-clicked to show only that category.
