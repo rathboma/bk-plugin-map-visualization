@@ -1,0 +1,259 @@
+/* Fallbacks for when the app theme hasn't arrived yet (or running outside Beekeeper).
+   :where() keeps them at zero specificity so the injected app theme always wins. */
+:where(:root) {
+  --font-size: 13px;
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --theme-bg: #f8f8f8;
+  --theme-base: #000;
+  --theme-primary: #f0c808;
+  --theme-secondary: #0099ff;
+  --text-dark: rgba(0, 0, 0, 0.87);
+  --text: rgba(0, 0, 0, 0.67);
+  --text-light: rgba(0, 0, 0, 0.57);
+  --text-lighter: rgba(0, 0, 0, 0.37);
+  --text-hint: rgba(0, 0, 0, 0.37);
+  --brand-info: #3498db;
+  --brand-warning: #dc700c;
+  --brand-danger: #ff5d59;
+  --border-color: rgba(0, 0, 0, 0.15);
+  --input-highlight: rgba(0, 0, 0, 0.27);
+  --query-editor-bg: #fff;
+  --menu-bg: #fff;
+  --menu-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.08), 0 6px 15px rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --scrollbar-track: transparent;
+}
+
+/* Derived tokens: computed from the app theme so they follow light/dark */
+:root {
+  --panel-bg: var(--theme-bg);
+  --surface: var(--query-editor-bg);
+  --raised: color-mix(in srgb, var(--theme-base) 4%, var(--theme-bg));
+  --hover: color-mix(in srgb, var(--theme-base) 7%, transparent);
+  --active: color-mix(in srgb, var(--theme-base) 12%, transparent);
+  --accent: var(--theme-secondary);
+  --radius: 6px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size, 13px);
+  color: var(--text-dark);
+  background: var(--panel-bg);
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+/* ---- controls ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.btn:hover {
+  background: color-mix(in srgb, var(--surface) 88%, var(--theme-base));
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn-primary {
+  background: var(--theme-primary);
+  border-color: transparent;
+  color: #0b0b0b;
+  font-weight: 600;
+}
+.btn-primary:hover {
+  background: color-mix(in srgb, var(--theme-primary) 88%, #000);
+}
+.btn-icon {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+.btn-flat {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-flat:hover {
+  background: var(--hover);
+}
+
+select,
+input[type="text"],
+input[type="number"],
+textarea {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--surface);
+  outline: none;
+  font-size: 12px;
+}
+select:focus,
+input:focus,
+textarea:focus {
+  border-color: var(--input-highlight);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+select option {
+  background: var(--surface);
+  color: var(--text-dark);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin: 0;
+}
+input[type="color"] {
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+/* ---- Leaflet overrides ---- */
+.leaflet-container {
+  font-family: var(--font-family);
+  background: color-mix(in srgb, var(--theme-base) 6%, var(--theme-bg));
+}
+.leaflet-container:focus {
+  outline: none;
+}
+.leaflet-container:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: -2px;
+}
+.leaflet-container.offline-basemap {
+  background: color-mix(in srgb, var(--theme-secondary) 10%, var(--theme-bg));
+}
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: var(--menu-bg);
+  color: var(--text-dark);
+  border-bottom-color: var(--border-color);
+}
+.leaflet-bar {
+  border: none !important;
+  box-shadow: var(--menu-shadow) !important;
+  border-radius: var(--radius) !important;
+  overflow: hidden;
+}
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--menu-bg) 80%, transparent) !important;
+  color: var(--text-light);
+  font-size: 10px;
+}
+.leaflet-control-attribution a {
+  color: var(--text);
+}
+
+.leaflet-tooltip.map-tip {
+  background: var(--menu-bg);
+  color: var(--text-dark);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: var(--menu-shadow);
+  padding: 6px 9px;
+  font-size: 12px;
+  /* absolutely positioned in a zero-width pane, so size to content explicitly */
+  width: max-content;
+  max-width: 320px;
+  white-space: normal;
+}
+.leaflet-tooltip.map-tip strong {
+  font-weight: 600;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.leaflet-tooltip.map-tip .tip-detail {
+  color: var(--text-light);
+  margin-top: 2px;
+}
+.leaflet-tooltip-top.map-tip::before {
+  border-top-color: var(--menu-bg);
+}
+
+.row-popup .leaflet-popup-content-wrapper,
+.row-popup .leaflet-popup-tip {
+  background: var(--menu-bg);
+  color: var(--text-dark);
+  box-shadow: var(--menu-shadow);
+}
+.row-popup .leaflet-popup-content-wrapper {
+  border-radius: 8px;
+}
+.row-popup .leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.row-popup a.leaflet-popup-close-button {
+  color: var(--text-light);
+}
+
+.cluster-icon {
+  background: transparent;
+}
+.cluster-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, rgba(255, 255, 255, 0.55)), 0 1px 4px rgba(0, 0, 0, 0.3);
+  opacity: 0.92;
+}

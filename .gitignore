@@ -147,3 +147,9 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Plugin release archives
+*.zip
+test-results
+.idea
+.DS_Store

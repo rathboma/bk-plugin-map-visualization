@@ -1,0 +1,84 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on version tags like v1.0.0
+
+permissions:
+  contents: write # For softprops
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get project information
+        id: project_info
+        run: |
+          PROJECT_ID=$(jq -r '.id' manifest.json)
+          VERSION=$(jq -r '.version' manifest.json)
+          # Extract version from tag (removing the 'v' prefix if present)
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_version=$TAG_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Verify Version Match
+        run: |
+          # Extract version from tag (remove 'v' prefix)
+          TAG_VERSION="${{ steps.project_info.outputs.tag_version }}"
+          MANIFEST_VERSION="${{ steps.project_info.outputs.version }}"
+
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "❌ Version mismatch: tag=$TAG_VERSION, manifest=$MANIFEST_VERSION"
+            exit 1
+          fi
+
+          echo "✅ Version match confirmed: $TAG_VERSION"
+
+      - name: Check if Release Exists
+        id: release_check
+        run: |
+          # Check if a release with this tag already exists
+          if gh release view "${GITHUB_REF#refs/tags/}" &>/dev/null; then
+            echo "❌ Release ${GITHUB_REF#refs/tags/} already exists"
+            exit 1
+          fi
+          echo "✅ Release ${GITHUB_REF#refs/tags/} does not exist yet"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'yarn'
+
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Test
+        run: yarn test:run
+
+      - name: Build Plugin
+        run: yarn build
+
+      - name: Create zip archive
+        id: create_zip
+        run: |
+          ZIP_NAME="${{ steps.project_info.outputs.project_id }}-${{ steps.project_info.outputs.version }}.zip"
+          zip -r "$ZIP_NAME" dist/ manifest.json LICENSE README.md
+          echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          name: "Release v${{ steps.project_info.outputs.version }}"
+          files: |
+            ${{ steps.create_zip.outputs.zip_name }}
+            manifest.json
