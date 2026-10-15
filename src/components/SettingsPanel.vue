@@ -10,8 +10,8 @@ import {
 } from "../lib/config";
 import { BASEMAP_OPTIONS, isValidTileUrl } from "../lib/basemaps";
 import { defaultMarkColor } from "../lib/color";
-import { cancelDownload, downloadWorldMap, importPackFile, offlineMap, removeOfflinePack } from "../lib/offlineMap";
-import { WORLD_PACK, formatBytes } from "../lib/pack";
+import { importPackFile, offlineMap, removeDetail } from "../lib/offlineMap";
+import { formatBytes } from "../lib/pack";
 
 const config = defineModel<MapConfig>({ required: true });
 
@@ -56,9 +56,7 @@ function setMode(mode: LocationMode) {
   }
 }
 
-const packSize = formatBytes(WORLD_PACK.bytes);
-const packBusy = computed(() => offlineMap.status === "downloading" || offlineMap.status === "saving");
-const showOffline = computed(() => ["auto", "offline-osm"].includes(config.value.basemap) || packBusy.value);
+const showOffline = computed(() => ["auto", "offline-osm"].includes(config.value.basemap));
 const fileInput = ref<HTMLInputElement | null>(null);
 
 async function onPackFile(e: Event) {
@@ -442,43 +440,20 @@ const customUrlInvalid = computed(
           Offline map
           <em v-if="offlineMap.world">{{ offlineMap.world.name }} · {{ formatBytes(offlineMap.world.bytes) }}</em>
         </span>
-        <template v-if="packBusy">
-          <p class="hint">
-            {{ offlineMap.status === "saving" ? "Saving…" : `Downloading… ${formatBytes(offlineMap.progress * WORLD_PACK.bytes)} of ${packSize}` }}
-          </p>
-          <div class="progress"><div :style="{ width: `${offlineMap.progress * 100}%` }" /></div>
-          <div class="row actions">
-            <button class="btn btn-flat" :disabled="offlineMap.status === 'saving'" @click="cancelDownload">Cancel</button>
-          </div>
-        </template>
-        <template v-else-if="offlineMap.world">
-          <p class="hint">Stored on this computer. Countries, regions, cities and major roads.</p>
-          <div class="row actions">
-            <button class="btn btn-flat" @click="removeOfflinePack('world')">Remove</button>
-          </div>
-        </template>
-        <template v-else-if="offlineMap.status === 'missing'">
-          <p class="hint">A world map from OpenStreetMap data, stored on this computer. Match app theme uses it once downloaded.</p>
-          <div class="row actions">
-            <button class="btn btn-primary" @click="downloadWorldMap">Download ({{ packSize }})</button>
-          </div>
-        </template>
+        <p v-if="offlineMap.world" class="hint">Built into the plugin. Countries, regions, cities and major roads.</p>
+        <p v-else class="hint warn">The built-in map didn't load ({{ offlineMap.worldError || "unknown error" }}); online tiles are used instead.</p>
 
-        <template v-if="offlineMap.status !== 'unavailable' && offlineMap.status !== 'checking'">
-          <span class="offline-title detail-title">
-            Detailed area
-            <em v-if="offlineMap.detail">{{ offlineMap.detail.name }} · {{ formatBytes(offlineMap.detail.bytes) }}</em>
-          </span>
-          <p v-if="offlineMap.detailSaving" class="hint">Saving…</p>
-          <p v-else-if="offlineMap.detail" class="hint">Drawn over the world map, with detail up to zoom {{ offlineMap.detail.maxZoom }}.</p>
-          <p v-else class="hint">A Protomaps .pmtiles file, such as one city at street level, drawn over the world map.</p>
-          <div class="row actions">
-            <button class="btn" :disabled="offlineMap.detailSaving" @click="fileInput?.click()">Load file…</button>
-            <button v-if="offlineMap.detail" class="btn btn-flat" :disabled="offlineMap.detailSaving" @click="removeOfflinePack('detail')">
-              Remove
-            </button>
-          </div>
-        </template>
+        <span class="offline-title detail-title">
+          Detailed area
+          <em v-if="offlineMap.detail">{{ offlineMap.detail.name }} · {{ formatBytes(offlineMap.detail.bytes) }}</em>
+        </span>
+        <p v-if="offlineMap.detailSaving" class="hint">Saving…</p>
+        <p v-else-if="offlineMap.detail" class="hint">Drawn over the world map, with detail up to zoom {{ offlineMap.detail.maxZoom }}.</p>
+        <p v-else class="hint">A Protomaps .pmtiles file, such as one city at street level, drawn over the world map.</p>
+        <div class="row actions">
+          <button class="btn" :disabled="offlineMap.detailSaving" @click="fileInput?.click()">Load file…</button>
+          <button v-if="offlineMap.detail" class="btn btn-flat" :disabled="offlineMap.detailSaving" @click="removeDetail">Remove</button>
+        </div>
         <p v-if="offlineMap.error" class="hint warn">{{ offlineMap.error }}</p>
         <input ref="fileInput" type="file" accept=".pmtiles" hidden @change="onPackFile" />
       </div>
@@ -591,18 +566,7 @@ h3 {
   height: 26px;
   font-size: 12px;
 }
-.progress {
-  height: 4px;
-  margin-top: 6px;
-  border-radius: 2px;
-  background: var(--border-color);
-  overflow: hidden;
-}
-.progress div {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.2s;
-}
+
 .segmented {
   display: flex;
   flex-wrap: wrap;

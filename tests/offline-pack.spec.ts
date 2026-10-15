@@ -1,18 +1,13 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { BlobSource, WORLD_PACK, downloadPack, formatBytes, maxZoomAt, validatePack, type PackInfo } from "../src/lib/pack";
+import { describe, expect, it } from "vitest";
+import { BlobSource, formatBytes, maxZoomAt, validatePack, type PackInfo } from "../src/lib/pack";
 import { basemapIsDark, resolveBasemap } from "../src/lib/basemaps";
 
-const packFile = readFileSync(new URL("../basemaps/world-v1.pmtiles", import.meta.url));
+const packFile = readFileSync(new URL("../basemaps/world.pmtiles", import.meta.url));
 
 describe("offline pack", () => {
-  it("ships the world pack at the size the download expects", () => {
-    expect(packFile.length).toBe(WORLD_PACK.bytes);
-    expect(WORLD_PACK.url).toContain(`/basemaps/${WORLD_PACK.id}.pmtiles`);
-  });
-
-  it("validates the bundled world pack", async () => {
+  it("validates the bundled world map", async () => {
     const meta = await validatePack(new Blob([packFile]));
     expect(meta.maxZoom).toBe(6);
     expect(meta.bounds[0]).toBeCloseTo(-180);
@@ -34,7 +29,7 @@ describe("offline pack", () => {
   });
 
   it("formats sizes", () => {
-    expect(formatBytes(WORLD_PACK.bytes)).toBe("20 MB");
+    expect(formatBytes(packFile.length)).toBe("20 MB");
     expect(formatBytes(1_500_000_000)).toBe("1.5 GB");
     expect(formatBytes(2_048)).toBe("2 KB");
   });
@@ -61,41 +56,14 @@ describe("maxZoomAt", () => {
   });
 });
 
-describe("downloadPack", () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  const streamOf = (chunks: number[]) =>
-    new ReadableStream<Uint8Array>({
-      start(c) {
-        for (const n of chunks) c.enqueue(new Uint8Array(n).fill(1));
-        c.close();
-      },
-    });
-
-  it("streams with progress and returns the whole file", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(streamOf([400, 400, 200]))));
-    const progress: number[] = [];
-    const blob = await downloadPack("https://example.test/pack.pmtiles", 1000, (f) => progress.push(f));
-    expect(blob.size).toBe(1000);
-    expect(progress).toEqual([0.4, 0.8, 1, 1]);
-  });
-
-  it("fails on truncated downloads and HTTP errors", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(streamOf([400]))));
-    await expect(downloadPack("https://example.test/a", 1000, () => undefined)).rejects.toThrow(/incomplete/);
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 404 })));
-    await expect(downloadPack("https://example.test/b", 1000, () => undefined)).rejects.toThrow("HTTP 404");
-  });
-});
-
 describe("basemap resolution with an offline pack", () => {
-  it("prefers the downloaded map for Match app theme", () => {
+  it("prefers the offline map for Match app theme", () => {
     expect(resolveBasemap("auto", false, true)).toBe("offline-osm");
     expect(resolveBasemap("auto", true, false)).toBe("esri-dark-gray");
     expect(resolveBasemap("auto", false, false)).toBe("esri-light-gray");
   });
 
-  it("falls back to the built-in outlines until the pack exists", () => {
+  it("falls back to the built-in outlines when the offline map is missing", () => {
     expect(resolveBasemap("offline-osm", false, false)).toBe("offline");
     expect(resolveBasemap("offline-osm", false, true)).toBe("offline-osm");
     expect(resolveBasemap("esri-imagery", false, true)).toBe("esri-imagery");

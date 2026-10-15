@@ -1,7 +1,7 @@
-// Builds the downloadable offline basemap from a Protomaps basemap extract.
+// Builds the bundled offline basemap from a Protomaps basemap extract.
 //
 //   pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles world-z6.pmtiles --maxzoom=6
-//   yarn basemap world-z6.pmtiles basemaps/world-v1.pmtiles
+//   yarn basemap world-z6.pmtiles basemaps/world.pmtiles
 //
 // Layers a data map doesn't draw (land use, land cover, points of interest) are dropped, which
 // roughly halves the file. Identical tiles (open ocean) are stored once.

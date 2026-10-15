@@ -79,16 +79,14 @@ The table button in the map toolbar sends every row in the current view to the r
 
 ## Basemaps and export
 
-The first map tab offers to download the **offline map**: a 20 MB world map built from OpenStreetMap data, stored
-in the plugin's own storage on this computer. Once it's there, maps draw without an internet connection or any
-third-party tile server. It has countries, regions, cities and major roads, which covers country to metro-area maps;
-zoomed in to street level it runs out of detail, and the status bar offers an online basemap instead.
-Skip the prompt with **Not now**; the download stays under **Settings → Basemap**.
+The plugin ships with an **offline map**: a 20 MB world map built from OpenStreetMap data, so maps draw without an
+internet connection or any third-party tile server. It has countries, regions, cities and major roads, which covers
+country to metro-area maps; zoomed in to street level it runs out of detail, and the status bar offers an online
+basemap instead.
 
-- **Match app theme** (default) uses the offline map in light or dark when it's downloaded, and Esri's light and dark
-  gray canvases until then.
+- **Match app theme** (default) uses the offline map in light or dark.
 - Esri streets, topographic and satellite imagery, OpenStreetMap, OpenTopoMap, or any custom `{z}/{x}/{y}` tile URL.
-- **Country outlines**: built into the plugin, for machines that can't download anything.
+- **Country outlines**: the simplest built-in map.
 - Export as **PNG** (map and legend), **copy the image** to the clipboard, or save the plotted rows as **GeoJSON**.
 
 ### More detailed offline maps
@@ -140,10 +138,10 @@ src/
   lib/build.ts            rows -> plottable items (CRS, axis order, geocoding)
   lib/model.ts            sizes, colors, aggregates, legends
   lib/renderer.ts         Leaflet layers
-  lib/pack.ts             offline map pack: download, validation, PMTiles source
-  lib/offlineMap.ts       offline map storage (IndexedDB) shared by all map tabs
+  lib/pack.ts             offline map packs: validation, PMTiles source
+  lib/offlineMap.ts       bundled world map + detailed area (IndexedDB), shared by all map tabs
   data/                   generated lookup tables (see below)
-basemaps/                 the downloadable world map (not part of the plugin zip)
+basemaps/world.pmtiles    the offline world map, bundled into dist/
 ```
 
 The lookup tables in `src/data/` are generated from public datasets:
@@ -159,12 +157,10 @@ dropped (about half the size, and a data map doesn't draw them):
 
 ```bash
 pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles world-z6.pmtiles --maxzoom=6
-yarn basemap world-z6.pmtiles basemaps/world-v2.pmtiles
+yarn basemap world-z6.pmtiles basemaps/world.pmtiles
 ```
 
-Published files never change: commit a new version and point `WORLD_PACK` in `src/lib/pack.ts` at its name and size.
-Older plugin versions keep downloading the file they were built with. Downloads come from `raw.githubusercontent.com`,
-which allows the cross-origin requests the plugin needs.
+`--maxzoom=5` gives a 5 MB map with fewer towns and roads, if the plugin download needs to be smaller.
 
 ### Releasing
 

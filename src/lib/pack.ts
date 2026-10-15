@@ -1,6 +1,6 @@
 import { PMTiles, TileType, type RangeResponse, type Source } from "pmtiles";
 
-/** A basemap pack: a Protomaps-schema vector PMTiles archive kept on this computer. */
+/** A basemap pack: a vector PMTiles archive in the Protomaps basemap schema. */
 export interface PackInfo {
   id: string;
   name: string;
@@ -8,21 +8,9 @@ export interface PackInfo {
   maxZoom: number;
   /** [west, south, east, north] */
   bounds: [number, number, number, number];
-  origin: "download" | "file";
+  origin: "bundled" | "file";
   savedAt: string;
 }
-
-/**
- * The downloadable world map: OpenStreetMap data from a Protomaps build, zoom 0-6, without land use,
- * land cover or POIs (see scripts/build-basemap.mjs). The file name is versioned so a published URL
- * never changes content; ship a new name (and bytes) when regenerating.
- */
-export const WORLD_PACK = {
-  id: "world-v1",
-  name: "World",
-  url: "https://raw.githubusercontent.com/rathboma/bk-plugin-map-visualization/main/basemaps/world-v1.pmtiles",
-  bytes: 19_957_955,
-} as const;
 
 export const PACK_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' +
@@ -71,36 +59,4 @@ export function maxZoomAt(world: PackInfo | null, detail: PackInfo | null, lat: 
     if (lng >= w && lng <= e && lat >= s && lat <= n) return detail.maxZoom;
   }
   return world?.maxZoom ?? detail?.maxZoom ?? null;
-}
-
-/** Streams a pack download, reporting progress as a 0..1 fraction. */
-export async function downloadPack(
-  url: string,
-  expectedBytes: number,
-  onProgress: (fraction: number) => void,
-  signal?: AbortSignal,
-): Promise<Blob> {
-  const res = await fetch(url, { signal, cache: "no-store" });
-  if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`);
-  const chunks: BlobPart[] = [];
-  let received = 0;
-  const reader = res.body?.getReader();
-  if (reader) {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.byteLength;
-      onProgress(Math.min(1, received / expectedBytes));
-    }
-  } else {
-    const buf = await res.arrayBuffer();
-    chunks.push(buf);
-    received = buf.byteLength;
-  }
-  if (received !== expectedBytes) {
-    throw new Error(`Download incomplete: got ${formatBytes(received)} of ${formatBytes(expectedBytes)}`);
-  }
-  onProgress(1);
-  return new Blob(chunks, { type: "application/vnd.pmtiles" });
 }

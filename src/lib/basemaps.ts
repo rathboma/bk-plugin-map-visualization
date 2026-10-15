@@ -85,8 +85,8 @@ export const BASEMAP_OPTIONS: { id: BasemapId; label: string }[] = [
 ];
 
 /**
- * Resolve "auto" against the app theme: the downloaded offline map when there is one, otherwise
- * Esri's gray canvases. The offline map falls back to the built-in outlines until it's downloaded.
+ * Resolve "auto" against the app theme: the bundled offline map, or Esri's gray canvases if it
+ * couldn't be loaded (then the offline map choice falls back to the built-in outlines).
  */
 export function resolveBasemap(id: BasemapId, dark: boolean, offlineReady = false): BasemapId {
   if (id === "auto") return offlineReady ? "offline-osm" : dark ? "esri-dark-gray" : "esri-light-gray";

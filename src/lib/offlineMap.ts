@@ -1,14 +1,10 @@
-// Offline basemap packs, shared by every map tab: stored in this plugin's IndexedDB (which persists
-// across app restarts), announced to other tabs over a BroadcastChannel.
-//
-// Two slots: the downloaded world map, and an optional detailed file (e.g. one city at street level)
-// that's drawn on top of it.
+// Offline basemap packs: the world map bundled with the plugin, plus an optional detailed file (e.g. one
+// city at street level) drawn on top of it. The detailed file lives in this plugin's IndexedDB, which
+// persists across app restarts, and other map tabs hear about changes over a BroadcastChannel.
 import { reactive } from "vue";
 import { PMTiles } from "pmtiles";
-import { BlobSource, WORLD_PACK, downloadPack, validatePack, type PackInfo } from "./pack";
-
-export type WorldStatus = "checking" | "missing" | "ready" | "downloading" | "saving" | "unavailable";
-export type Slot = "world" | "detail";
+import worldUrl from "../../basemaps/world.pmtiles?url";
+import { BlobSource, validatePack, type PackInfo } from "./pack";
 
 export interface OfflineLayer {
   pmtiles: PMTiles;
@@ -30,41 +26,60 @@ interface PackRecord {
 
 const DB_NAME = "offline-map";
 const STORE = "packs";
-const PROMPT_KEY = "offline-map-prompt";
+const DETAIL_KEY = "detail";
 
 export const offlineMap = reactive({
-  /** The downloadable world map */
-  status: "checking" as WorldStatus,
   world: null as PackInfo | null,
   detail: null as PackInfo | null,
   detailSaving: false,
-  progress: 0,
+  /** Why the bundled world map couldn't be read */
+  worldError: "",
+  /** Detailed-area problems (bad file, storage unavailable) */
   error: "",
-  promptDismissed: readPromptDismissed(),
 });
 
-const layers: Record<Slot, OfflineLayer | null> = { world: null, detail: null };
-let controller: AbortController | null = null;
+const layers: { world: OfflineLayer | null; detail: OfflineLayer | null } = { world: null, detail: null };
+let worldLoad: Promise<void> | null = null;
 const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("offline-map") : null;
-channel?.addEventListener("message", () => {
-  if (offlineMap.status !== "downloading" && offlineMap.status !== "saving") loadOfflineMap();
-});
+channel?.addEventListener("message", () => loadDetail());
 
-function readPromptDismissed(): boolean {
-  try {
-    return localStorage.getItem(PROMPT_KEY) === "dismissed";
-  } catch {
-    return false;
-  }
+// fetch() rejects plugin:// URLs (the scheme isn't registered for the Fetch API), but XHR works
+function readFile(url: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", url);
+    xhr.responseType = "blob";
+    xhr.onload = () => (xhr.status === 200 ? resolve(xhr.response) : reject(new Error(`HTTP ${xhr.status}`)));
+    xhr.onerror = () => reject(new Error(`Couldn't read ${url}`));
+    xhr.send();
+  });
 }
 
-export function dismissOfflinePrompt() {
-  offlineMap.promptDismissed = true;
-  try {
-    localStorage.setItem(PROMPT_KEY, "dismissed");
-  } catch {
-    // storage blocked: the prompt comes back next time, which is harmless
-  }
+// plugin:// can't serve byte ranges, so the archive is read once and tiles are sliced out of the Blob
+function loadWorld(): Promise<void> {
+  worldLoad ??= (async () => {
+    try {
+      const blob = await readFile(worldUrl);
+      const key = `world@${blob.size}`;
+      const pmtiles = new PMTiles(new BlobSource(blob, key));
+      const header = await pmtiles.getHeader();
+      const info: PackInfo = {
+        id: "world",
+        name: "World",
+        bytes: blob.size,
+        maxZoom: header.maxZoom,
+        bounds: [header.minLon, header.minLat, header.maxLon, header.maxLat],
+        origin: "bundled",
+        savedAt: "",
+      };
+      layers.world = { pmtiles, key, info };
+      offlineMap.world = info;
+    } catch (e) {
+      // Falls back to online tiles
+      offlineMap.worldError = e instanceof Error ? e.message : String(e);
+    }
+  })();
+  return worldLoad;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -91,32 +106,29 @@ async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore
   }
 }
 
-function layerFor(slot: Slot, record: PackRecord | undefined): OfflineLayer | null {
-  if (!record?.blob || !record.info) return null;
-  const key = `${slot}:${record.info.id}@${record.info.savedAt}`;
-  if (layers[slot]?.key === key) return layers[slot];
-  return { pmtiles: new PMTiles(new BlobSource(record.blob, key)), key, info: record.info };
-}
-
-/** Reads the stored packs. Call before the first basemap is drawn so "Match app theme" picks the right one. */
-export async function loadOfflineMap(): Promise<void> {
-  if (typeof indexedDB === "undefined") {
-    offlineMap.status = "unavailable";
-    return;
-  }
+async function loadDetail(): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
   try {
-    for (const slot of ["world", "detail"] as const) {
-      layers[slot] = layerFor(slot, await withStore<PackRecord | undefined>("readonly", (s) => s.get(slot)));
+    const record = await withStore<PackRecord | undefined>("readonly", (s) => s.get(DETAIL_KEY));
+    if (record?.blob && record.info) {
+      const key = `detail:${record.info.savedAt}`;
+      if (layers.detail?.key !== key) {
+        layers.detail = { pmtiles: new PMTiles(new BlobSource(record.blob, key)), key, info: record.info };
+      }
+    } else {
+      layers.detail = null;
     }
-    offlineMap.world = layers.world?.info ?? null;
     offlineMap.detail = layers.detail?.info ?? null;
-    offlineMap.status = layers.world ? "ready" : "missing";
   } catch (e) {
-    layers.world = layers.detail = null;
-    offlineMap.world = offlineMap.detail = null;
-    offlineMap.status = "unavailable";
+    layers.detail = null;
+    offlineMap.detail = null;
     offlineMap.error = `Offline storage isn't available: ${e instanceof Error ? e.message : String(e)}`;
   }
+}
+
+/** Loads the bundled world map and any detailed area. Call before the first basemap is drawn. */
+export async function loadOfflineMap(): Promise<void> {
+  await Promise.all([loadWorld(), loadDetail()]);
 }
 
 /** The packs to draw, or null when there are none. */
@@ -126,74 +138,37 @@ export function offlineArchives(): OfflineArchives | null {
   return { world, detail, key: `${world?.key ?? ""}|${detail?.key ?? ""}` };
 }
 
-async function save(slot: Slot, blob: Blob, info: PackInfo) {
-  await withStore("readwrite", (s) => s.put({ info, blob } satisfies PackRecord, slot));
-  navigator.storage?.persist?.().catch(() => undefined);
-  // Re-read so tiles come from the disk-backed copy instead of the downloaded chunks in memory
-  await loadOfflineMap();
-  channel?.postMessage("changed");
-}
-
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-export async function downloadWorldMap(): Promise<boolean> {
-  if (offlineMap.status === "downloading" || offlineMap.status === "saving") return false;
-  controller = new AbortController();
-  offlineMap.status = "downloading";
-  offlineMap.progress = 0;
-  offlineMap.error = "";
-  try {
-    const blob = await downloadPack(WORLD_PACK.url, WORLD_PACK.bytes, (f) => (offlineMap.progress = f), controller.signal);
-    const meta = await validatePack(blob);
-    offlineMap.status = "saving";
-    await save("world", blob, {
-      id: WORLD_PACK.id,
-      name: WORLD_PACK.name,
-      bytes: blob.size,
-      ...meta,
-      origin: "download",
-      savedAt: new Date().toISOString(),
-    });
-    return true;
-  } catch (e) {
-    if (!controller?.signal.aborted) offlineMap.error = messageOf(e);
-    offlineMap.status = layers.world ? "ready" : "missing";
-    return false;
-  } finally {
-    controller = null;
-  }
-}
-
-export function cancelDownload() {
-  controller?.abort();
-}
-
 /** Uses a local .pmtiles file (e.g. a street-level extract of one city) as the detailed area. */
 export async function importPackFile(file: File): Promise<boolean> {
   offlineMap.error = "";
   offlineMap.detailSaving = true;
   try {
     const meta = await validatePack(file);
-    await save("detail", file, {
+    const info: PackInfo = {
       id: "file",
       name: file.name.replace(/\.pmtiles$/i, ""),
       bytes: file.size,
       ...meta,
       origin: "file",
       savedAt: new Date().toISOString(),
-    });
+    };
+    await withStore("readwrite", (s) => s.put({ info, blob: file } satisfies PackRecord, DETAIL_KEY));
+    navigator.storage?.persist?.().catch(() => undefined);
+    // Re-read so tiles come from the stored copy rather than the picked file
+    await loadDetail();
+    channel?.postMessage("changed");
     return true;
   } catch (e) {
-    offlineMap.error = messageOf(e);
+    offlineMap.error = e instanceof Error ? e.message : String(e);
     return false;
   } finally {
     offlineMap.detailSaving = false;
   }
 }
 
-export async function removeOfflinePack(slot: Slot) {
+export async function removeDetail() {
   offlineMap.error = "";
-  await withStore("readwrite", (s) => s.delete(slot));
-  await loadOfflineMap();
+  await withStore("readwrite", (s) => s.delete(DETAIL_KEY));
+  await loadDetail();
   channel?.postMessage("changed");
 }
