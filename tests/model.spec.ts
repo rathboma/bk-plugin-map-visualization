@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { computed, reactive } from "vue";
 import { buildRenderModel, formatCell } from "../src/lib/model";
 import { buildItems } from "../src/lib/build";
 import { defaultConfig, mergeConfig, type MapConfig } from "../src/lib/config";
@@ -99,6 +100,23 @@ describe("buildRenderModel", () => {
     const built = await buildItems(data, cfg.location);
     const m = buildRenderModel(data, built.items, cfg, false);
     expect(m.items.map((i) => m.heatWeight(i))).toEqual([0.02, 0.5, 1]);
+  });
+
+  it("rebuilds a reactive model when fixed sizes change", async () => {
+    const data = ds(["lat", "lng"], [[1, 1]]);
+    const cfg = reactive(config({ location: { latColumn: "lat", lngColumn: "lng" } }));
+    const built = await buildItems(data, cfg.location);
+    const m = computed(() => buildRenderModel(data, built.items, cfg, false));
+    // The map redraws when the model is rebuilt, so a settings change must produce a new one
+    const before = m.value;
+    cfg.style.radius = 14;
+    expect(m.value).not.toBe(before);
+    expect(m.value.radius(built.items[0])).toBe(14);
+    cfg.style.layer = "lines";
+    const lines = m.value;
+    cfg.style.lineWidth = 7;
+    expect(m.value).not.toBe(lines);
+    expect(m.value.lineWidth(built.items[0])).toBe(7);
   });
 });
 

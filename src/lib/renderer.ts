@@ -24,6 +24,11 @@ declare module "leaflet" {
 
 type ItemLayer = L.Layer & { options: L.PathOptions & { item?: PlotItem; region?: RegionDatum } };
 
+interface PointMarker {
+  item: PlotItem;
+  marker: L.CircleMarker;
+}
+
 export interface RendererCallbacks {
   itemPopup(item: PlotItem): HTMLElement;
   regionPopup(region: RegionDatum): HTMLElement;
@@ -47,6 +52,13 @@ function textWidth(text: string): number {
   if (!measureCtx) return text.length * 6.5;
   measureCtx.font = LABEL_FONT;
   return measureCtx.measureText(text).width;
+}
+
+interface MarkerOptions {
+  radius?: number;
+  label?: string | null;
+  inside?: boolean;
+  ring?: boolean;
 }
 
 type LabeledInternals = L.CircleMarker & {
@@ -134,6 +146,10 @@ export class MapRenderer {
   private hovered: L.Path | null = null;
   private hoveredStyle: L.PathOptions = {};
   private heatRescale: (() => void) | null = null;
+  /** The model the data layer shows; hover tooltips read it, so restyles keep them current */
+  private model: RenderModel | null = null;
+  /** The points layer's markers in draw order, for restyling them in place */
+  private points: PointMarker[] | null = null;
 
   constructor(private el: HTMLElement, private cb: RendererCallbacks) {
     this.map = L.map(el, {
@@ -251,7 +267,11 @@ export class MapRenderer {
   async render(model: RenderModel) {
     const token = ++this.renderToken;
     this.dark = model.dark;
+    // Sliders and the colour picker send many changes a second; rebuilding thousands of markers for
+    // each one lags, so when the same points are drawn in the same order they're restyled instead
+    if (this.restylePoints(model)) return;
     let layer: L.Layer;
+    let points: PointMarker[] | null = null;
     switch (model.layer) {
       case "heatmap":
         layer = this.heatLayer(model);
@@ -272,10 +292,12 @@ export class MapRenderer {
         break;
       }
       default:
-        layer = this.pointLayer(model);
+        ({ layer, points } = this.pointLayer(model));
     }
     if (token !== this.renderToken) return;
     this.clearData();
+    this.model = model;
+    this.points = points;
     this.dataLayer = layer.addTo(this.map);
   }
 
@@ -286,6 +308,8 @@ export class MapRenderer {
     this.map.closePopup();
     if (this.dataLayer) this.map.removeLayer(this.dataLayer);
     this.dataLayer = null;
+    this.model = null;
+    this.points = null;
     this.hovered = null;
   }
 
@@ -298,17 +322,12 @@ export class MapRenderer {
     return this.dark ? "#1a1a19" : "#ffffff";
   }
 
-  private marker(
-    item: PlotItem,
-    model: RenderModel,
-    opts: { radius?: number; label?: string | null; inside?: boolean; ring?: boolean } = {}
-  ) {
+  private markerStyle(item: PlotItem, model: RenderModel, opts: MarkerOptions = {}): LabeledOptions {
     const color = model.color(item);
     const label = opts.label !== undefined ? opts.label : model.label(item);
     const inside = opts.inside ?? model.labelInside;
     const base = opts.radius ?? model.radius(item);
-    return new LabeledCircleMarker([item.lat, item.lng], {
-      renderer: this.canvas,
+    return {
       radius: inside ? radiusForLabel(label, base) : base,
       color: this.surface(),
       weight: opts.ring === false ? 0 : 1,
@@ -319,8 +338,11 @@ export class MapRenderer {
       labelPosition: inside ? "inside" : "right",
       labelColor: inside ? textOn(color) : this.dark ? "#f0efec" : "#0b0b0b",
       labelHalo: this.dark ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.9)",
-      item,
-    });
+    };
+  }
+
+  private marker(item: PlotItem, model: RenderModel, opts: MarkerOptions = {}) {
+    return new LabeledCircleMarker([item.lat, item.lng], { renderer: this.canvas, ...this.markerStyle(item, model, opts), item });
   }
 
   private shape(item: PlotItem, model: RenderModel): L.Layer {
@@ -341,7 +363,7 @@ export class MapRenderer {
   }
 
   /** Shared hover tooltip + click popup for every layer in a group. */
-  private interactive<T extends L.FeatureGroup>(group: T, model: RenderModel): T {
+  private interactive<T extends L.FeatureGroup>(group: T): T {
     group.on("mouseover", (e: L.LeafletMouseEvent & { layer?: ItemLayer }) => {
       const target = e.layer as ItemLayer | undefined;
       const item = target?.options.item;
@@ -354,8 +376,8 @@ export class MapRenderer {
       if (region) {
         strong.textContent = region.name;
         detail.textContent = `${Number.isFinite(region.value) ? region.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "–"} · ${region.count.toLocaleString()} row${region.count === 1 ? "" : "s"}`;
-      } else if (item) {
-        const tip = model.tooltip(item);
+      } else if (item && this.model) {
+        const tip = this.model.tooltip(item);
         strong.textContent = tip.title;
         if (tip.detail) detail.textContent = tip.detail;
       }
@@ -401,14 +423,37 @@ export class MapRenderer {
     return group;
   }
 
-  private pointLayer(model: RenderModel): L.Layer {
+  /** Big bubbles first so small ones stay visible on top. */
+  private drawOrder(model: RenderModel): PlotItem[] {
+    return [...model.items].sort((a, b) => model.radius(b) - model.radius(a));
+  }
+
+  private pointLayer(model: RenderModel): { layer: L.Layer; points: PointMarker[] | null } {
     const layers: L.Layer[] = [];
-    // Draw big bubbles first so small ones stay visible on top
-    const ordered = [...model.items].sort((a, b) => model.radius(b) - model.radius(a));
-    for (const item of ordered) {
-      layers.push(item.geometry ? this.shape(item, model) : this.marker(item, model));
+    const points: PointMarker[] = [];
+    let shapes = false;
+    for (const item of this.drawOrder(model)) {
+      if (item.geometry) {
+        shapes = true;
+        layers.push(this.shape(item, model));
+      } else {
+        const marker = this.marker(item, model);
+        points.push({ item, marker });
+        layers.push(marker);
+      }
     }
-    return this.interactive(L.featureGroup(layers), model);
+    return { layer: this.interactive(L.featureGroup(layers)), points: shapes ? null : points };
+  }
+
+  private restylePoints(model: RenderModel): boolean {
+    const points = this.points;
+    if (model.layer !== "points" || !points || points.length !== model.items.length) return false;
+    const ordered = this.drawOrder(model);
+    if (ordered.some((item, i) => points[i].item !== item)) return false;
+    this.restoreHover();
+    this.model = model;
+    for (const { item, marker } of points) marker.setStyle(this.markerStyle(item, model));
+    return true;
   }
 
   private clusterLayer(model: RenderModel): L.Layer {
@@ -431,7 +476,7 @@ export class MapRenderer {
       },
     });
     group.addLayers(model.items.map((item) => this.marker(item, model)));
-    return this.interactive(group, model);
+    return this.interactive(group);
   }
 
   private heatLayer(model: RenderModel): L.Layer {
@@ -494,7 +539,7 @@ export class MapRenderer {
         });
       }
     }
-    return this.interactive(L.featureGroup(layers), model);
+    return this.interactive(L.featureGroup(layers));
   }
 
   private linesLayer(model: RenderModel): L.Layer {
@@ -523,7 +568,7 @@ export class MapRenderer {
         }
       }
     }
-    return this.interactive(L.featureGroup(layers), model);
+    return this.interactive(L.featureGroup(layers));
   }
 
   private regionLayer(model: RenderModel, shapes: Map<string, { feature: Feature<Geometry> }>): L.Layer {
@@ -556,7 +601,7 @@ export class MapRenderer {
         layers.push(m);
       }
     }
-    return this.interactive(L.featureGroup(layers), model);
+    return this.interactive(L.featureGroup(layers));
   }
 
   // ---------------------------------------------------------------------------
