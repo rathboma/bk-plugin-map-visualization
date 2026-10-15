@@ -18,6 +18,7 @@ export const BASEMAP_IDS = [
   "esri-imagery",
   "osm",
   "opentopo",
+  "offline-osm",
   "offline",
   "custom",
 ] as const;

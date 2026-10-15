@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
   LAYER_LABELS,
   LOCATION_LABELS,
@@ -10,6 +10,8 @@ import {
 } from "../lib/config";
 import { BASEMAP_OPTIONS, isValidTileUrl } from "../lib/basemaps";
 import { defaultMarkColor } from "../lib/color";
+import { cancelDownload, downloadWorldMap, importPackFile, offlineMap, removeOfflinePack } from "../lib/offlineMap";
+import { WORLD_PACK, formatBytes } from "../lib/pack";
 
 const config = defineModel<MapConfig>({ required: true });
 
@@ -52,6 +54,18 @@ function setMode(mode: LocationMode) {
   if (!layersFor(mode).includes(style.value.layer)) {
     style.value.layer = layersFor(mode)[0];
   }
+}
+
+const packSize = formatBytes(WORLD_PACK.bytes);
+const packBusy = computed(() => offlineMap.status === "downloading" || offlineMap.status === "saving");
+const showOffline = computed(() => ["auto", "offline-osm"].includes(config.value.basemap) || packBusy.value);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+async function onPackFile(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) await importPackFile(file);
 }
 
 const customUrlInvalid = computed(
@@ -422,6 +436,52 @@ const customUrlInvalid = computed(
         <p v-if="customUrlInvalid" class="hint warn">Needs an http(s) URL containing {z}, {x} and {y}.</p>
       </template>
       <p v-if="config.basemap === 'offline'" class="hint">Works without network access.</p>
+
+      <div v-if="showOffline" class="offline">
+        <span class="offline-title">
+          Offline map
+          <em v-if="offlineMap.world">{{ offlineMap.world.name }} · {{ formatBytes(offlineMap.world.bytes) }}</em>
+        </span>
+        <template v-if="packBusy">
+          <p class="hint">
+            {{ offlineMap.status === "saving" ? "Saving…" : `Downloading… ${formatBytes(offlineMap.progress * WORLD_PACK.bytes)} of ${packSize}` }}
+          </p>
+          <div class="progress"><div :style="{ width: `${offlineMap.progress * 100}%` }" /></div>
+          <div class="row actions">
+            <button class="btn btn-flat" :disabled="offlineMap.status === 'saving'" @click="cancelDownload">Cancel</button>
+          </div>
+        </template>
+        <template v-else-if="offlineMap.world">
+          <p class="hint">Stored on this computer. Countries, regions, cities and major roads.</p>
+          <div class="row actions">
+            <button class="btn btn-flat" @click="removeOfflinePack('world')">Remove</button>
+          </div>
+        </template>
+        <template v-else-if="offlineMap.status === 'missing'">
+          <p class="hint">A world map from OpenStreetMap data, stored on this computer. Match app theme uses it once downloaded.</p>
+          <div class="row actions">
+            <button class="btn btn-primary" @click="downloadWorldMap">Download ({{ packSize }})</button>
+          </div>
+        </template>
+
+        <template v-if="offlineMap.status !== 'unavailable' && offlineMap.status !== 'checking'">
+          <span class="offline-title detail-title">
+            Detailed area
+            <em v-if="offlineMap.detail">{{ offlineMap.detail.name }} · {{ formatBytes(offlineMap.detail.bytes) }}</em>
+          </span>
+          <p v-if="offlineMap.detailSaving" class="hint">Saving…</p>
+          <p v-else-if="offlineMap.detail" class="hint">Drawn over the world map, with detail up to zoom {{ offlineMap.detail.maxZoom }}.</p>
+          <p v-else class="hint">A Protomaps .pmtiles file, such as one city at street level, drawn over the world map.</p>
+          <div class="row actions">
+            <button class="btn" :disabled="offlineMap.detailSaving" @click="fileInput?.click()">Load file…</button>
+            <button v-if="offlineMap.detail" class="btn btn-flat" :disabled="offlineMap.detailSaving" @click="removeOfflinePack('detail')">
+              Remove
+            </button>
+          </div>
+        </template>
+        <p v-if="offlineMap.error" class="hint warn">{{ offlineMap.error }}</p>
+        <input ref="fileInput" type="file" accept=".pmtiles" hidden @change="onPackFile" />
+      </div>
     </section>
   </div>
 </template>
@@ -503,6 +563,45 @@ h3 {
 }
 .hint.warn {
   color: var(--brand-warning);
+}
+.offline {
+  margin-top: 12px;
+}
+.offline-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text);
+}
+.detail-title {
+  margin-top: 12px;
+}
+.offline-title em {
+  font-style: normal;
+  color: var(--text-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actions {
+  margin-top: 8px;
+}
+.actions .btn {
+  height: 26px;
+  font-size: 12px;
+}
+.progress {
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+.progress div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
 }
 .segmented {
   display: flex;

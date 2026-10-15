@@ -79,20 +79,41 @@ The table button in the map toolbar sends every row in the current view to the r
 
 ## Basemaps and export
 
-- **Match app theme** (default) switches between Esri's light and dark gray canvases, built for overlaying data.
+The first map tab offers to download the **offline map**: a 20 MB world map built from OpenStreetMap data, stored
+in the plugin's own storage on this computer. Once it's there, maps draw without an internet connection or any
+third-party tile server. It has countries, regions, cities and major roads, which covers country to metro-area maps;
+zoomed in to street level it runs out of detail, and the status bar offers an online basemap instead.
+Skip the prompt with **Not now**; the download stays under **Settings → Basemap**.
+
+- **Match app theme** (default) uses the offline map in light or dark when it's downloaded, and Esri's light and dark
+  gray canvases until then.
 - Esri streets, topographic and satellite imagery, OpenStreetMap, OpenTopoMap, or any custom `{z}/{x}/{y}` tile URL.
-- **Offline**: bundled country outlines that need no network access.
+- **Country outlines**: built into the plugin, for machines that can't download anything.
 - Export as **PNG** (map and legend), **copy the image** to the clipboard, or save the plotted rows as **GeoJSON**.
+
+### More detailed offline maps
+
+**Detailed area → Load file…** under Settings → Basemap adds a [Protomaps basemap](https://docs.protomaps.com/basemaps/downloads)
+`.pmtiles` file on top of the world map, such as a street-level extract of one city or country made with the
+[`pmtiles` CLI](https://github.com/protomaps/go-pmtiles/releases). Outside the file's area the world map shows as usual.
+
+```bash
+# street detail for New York City (about 100 MB)
+pmtiles extract https://build.protomaps.com/20261014.pmtiles nyc.pmtiles --bbox=-74.26,40.48,-73.69,40.92 --maxzoom=15
+```
+
+Use a [recent build date](https://maps.protomaps.com/builds/). Files in other tile schemas (OpenMapTiles, raster) are rejected.
 
 Settings, the query and the viewport are saved with the tab. A restored tab only re-runs its query automatically if
 it ran before and is a single read-only `SELECT`.
 
 ## Known issues
 
-Two Beekeeper Studio bugs affect this plugin in 6.1.5 and earlier; fixes are pending upstream:
+Three Beekeeper Studio bugs affect this plugin in 6.1.5 and earlier; fixes are pending upstream:
 
 - In the Community edition, plugin tabs with a result panel (like this one) render only about 150px tall.
 - **Plot Query on Map** in the query editor's context menu does nothing (the host doesn't pass the query text).
+- **Copy image** fails with an error; **Save as PNG…** works.
 
 The other entry points work in the meantime.
 
@@ -119,7 +140,10 @@ src/
   lib/build.ts            rows -> plottable items (CRS, axis order, geocoding)
   lib/model.ts            sizes, colors, aggregates, legends
   lib/renderer.ts         Leaflet layers
+  lib/pack.ts             offline map pack: download, validation, PMTiles source
+  lib/offlineMap.ts       offline map storage (IndexedDB) shared by all map tabs
   data/                   generated lookup tables (see below)
+basemaps/                 the downloadable world map (not part of the plugin zip)
 ```
 
 The lookup tables in `src/data/` are generated from public datasets:
@@ -129,6 +153,18 @@ The lookup tables in `src/data/` are generated from public datasets:
 # and 2023_Gaz_zcta_national.zip from the US Census gazetteer, unzip them into one folder, then:
 yarn geodata /path/to/that/folder
 ```
+
+The offline world map in `basemaps/` is a Protomaps build cut to zoom 6, with the land use, land cover and POI layers
+dropped (about half the size, and a data map doesn't draw them):
+
+```bash
+pmtiles extract https://build.protomaps.com/<YYYYMMDD>.pmtiles world-z6.pmtiles --maxzoom=6
+yarn basemap world-z6.pmtiles basemaps/world-v2.pmtiles
+```
+
+Published files never change: commit a new version and point `WORLD_PACK` in `src/lib/pack.ts` at its name and size.
+Older plugin versions keep downloading the file they were built with. Downloads come from `raw.githubusercontent.com`,
+which allows the cross-origin requests the plugin needs.
 
 ### Releasing
 
@@ -140,6 +176,9 @@ The release workflow tests, builds and creates a draft GitHub release with `mani
 - City data © [GeoNames](https://www.geonames.org), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 - Country and state shapes from [Natural Earth](https://www.naturalearthdata.com) via `world-atlas`, and US Census via `us-atlas` (public domain).
 - ZIP code centroids from the US Census Bureau ZCTA gazetteer (public domain).
+- The offline map is © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) ([ODbL](https://opendatacommons.org/licenses/odbl/))
+  and [Natural Earth](https://www.naturalearthdata.com), from a [Protomaps](https://protomaps.com) basemap build, drawn with
+  protomaps-leaflet (BSD-3-Clause).
 - Map tiles are provided by their respective services (Esri, OpenStreetMap, OpenTopoMap) under their own terms; attribution is shown on the map.
 - Built with [Leaflet](https://leafletjs.com), Leaflet.markercluster and Leaflet.heat.
 

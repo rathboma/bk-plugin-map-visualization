@@ -9,6 +9,8 @@ import type { PlotItem } from "./build";
 import type { RegionDatum, RenderModel } from "./model";
 import { heatStops } from "./model";
 import { isValidTileUrl, resolveBasemap, tileBasemap } from "./basemaps";
+import type { OfflineArchives, OfflineLayer } from "./offlineMap";
+import { PACK_ATTRIBUTION } from "./pack";
 import { loadCountryShapes, loadStateShapes, loadWorldOutline } from "./geo/regions";
 import { textOn } from "./color";
 
@@ -163,9 +165,10 @@ export class MapRenderer {
   // ---------------------------------------------------------------------------
   // Basemap
 
-  async setBasemap(id: BasemapId, appDark: boolean, customUrl: string) {
-    const resolved = resolveBasemap(id, appDark);
-    const key = `${resolved}|${resolved === "custom" ? customUrl : ""}|${resolved === "offline" ? appDark : ""}`;
+  async setBasemap(id: BasemapId, appDark: boolean, customUrl: string, offline: OfflineArchives | null = null) {
+    const resolved = resolveBasemap(id, appDark, !!offline);
+    const local = resolved === "offline" || resolved === "offline-osm";
+    const key = [resolved, resolved === "custom" ? customUrl : "", local ? appDark : "", resolved === "offline-osm" ? offline?.key : ""].join("|");
     if (key === this.baseKey) return;
     this.baseKey = key;
     if (this.baseLayer) this.map.removeLayer(this.baseLayer);
@@ -173,6 +176,35 @@ export class MapRenderer {
     this.tileErrors = 0;
     this.tileLoads = 0;
     this.el.classList.toggle("offline-basemap", resolved === "offline");
+    // Water colour of the white / black flavors, so edges and unloaded tiles blend in
+    this.el.style.backgroundColor = resolved === "offline-osm" ? (appDark ? "#333333" : "#dcdcdc") : "";
+
+    if (resolved === "offline-osm" && offline) {
+      // Loaded on demand: only maps that use the offline basemap pay for the vector renderer
+      const { leafletLayer } = await import("protomaps-leaflet");
+      if (this.baseKey !== key) return;
+      const vector = (pack: OfflineLayer, overlay: boolean) => {
+        const [w, s, e, n] = pack.info.bounds;
+        const layer = leafletLayer({
+          url: pack.pmtiles,
+          flavor: appDark ? "black" : "white",
+          lang: navigator.language?.split("-")[0] || "en",
+          maxDataZoom: pack.info.maxZoom,
+          maxZoom: 19,
+          bounds: overlay ? [[s, w], [n, e]] : undefined,
+          pane: "basemapPane",
+          attribution: PACK_ATTRIBUTION,
+        });
+        // The detailed area skips the background fill so the world map shows around it
+        if (overlay) layer.backgroundColor = undefined;
+        return layer as unknown as L.Layer;
+      };
+      const layers: L.Layer[] = [];
+      if (offline.world) layers.push(vector(offline.world, false));
+      if (offline.detail) layers.push(vector(offline.detail, true));
+      this.baseLayer = L.layerGroup(layers).addTo(this.map);
+      return;
+    }
 
     if (resolved === "offline") {
       const features = await loadWorldOutline();

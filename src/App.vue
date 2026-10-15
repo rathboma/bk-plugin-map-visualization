@@ -20,6 +20,7 @@ import {
 import SettingsPanel from "./components/SettingsPanel.vue";
 import MapLegend from "./components/MapLegend.vue";
 import Icon from "./components/Icon.vue";
+import OfflinePrompt from "./components/OfflinePrompt.vue";
 import { defaultConfig, mergeConfig, type MapConfig } from "./lib/config";
 import {
   datasetFromQueryResult,
@@ -34,7 +35,9 @@ import { applySuggestion, profileColumns, suggestConfig, type ColumnProfile } fr
 import { buildItems, type BuildResult, type PlotItem } from "./lib/build";
 import { aggregationTitle, buildRenderModel, describeValue, type RegionDatum, type RenderModel } from "./lib/model";
 import { MapRenderer } from "./lib/renderer";
-import { basemapIsDark } from "./lib/basemaps";
+import { basemapIsDark, resolveBasemap } from "./lib/basemaps";
+import { dismissOfflinePrompt, loadOfflineMap, offlineArchives, offlineMap } from "./lib/offlineMap";
+import { maxZoomAt } from "./lib/pack";
 import { buildTableQuery, isSafeToAutoRun, queryFromEditorParams } from "./lib/host";
 import { elementToPng, itemsToGeoJson, regionsToGeoJson } from "./lib/export";
 
@@ -73,6 +76,8 @@ const tileWarning = ref(false);
 const exportOpen = ref(false);
 const initialized = ref(false);
 const selectionNote = ref("");
+const view = ref({ center: { lat: 20, lng: 0 }, zoom: 2 });
+const promptClosed = ref(false);
 
 const mapWrap = ref<HTMLElement | null>(null);
 const mapEl = ref<HTMLElement | null>(null);
@@ -88,7 +93,25 @@ const columns = computed(() => dataset.value.columns);
 const numericColumns = computed(() =>
   profiles.value.filter((p) => p.nonNull > 0 && p.numeric / p.nonNull > 0.9).map((p) => p.name)
 );
-const marksDark = computed(() => basemapIsDark(config.value.basemap, appDark.value));
+const offlineReady = computed(() => !!offlineMap.world || !!offlineMap.detail);
+const marksDark = computed(() => basemapIsDark(config.value.basemap, appDark.value, offlineReady.value));
+const activeBasemap = computed(() => resolveBasemap(config.value.basemap, appDark.value, offlineReady.value));
+
+// First run: offer the offline map while "Match app theme" still relies on online tiles
+const showOfflinePrompt = computed(() => {
+  if (!initialized.value || promptClosed.value) return false;
+  const s = offlineMap.status;
+  if (s !== "missing" && s !== "downloading" && s !== "saving") return false;
+  return config.value.basemap === "offline-osm" || (config.value.basemap === "auto" && !offlineMap.promptDismissed);
+});
+
+// The world pack stops at zoom 6; a few levels of overzoom still look fine, past that it's mostly blank
+const offlineTooCoarse = computed(() => {
+  if (activeBasemap.value !== "offline-osm") return false;
+  const { center } = view.value;
+  const maxZoom = maxZoomAt(offlineMap.world, offlineMap.detail, center.lat, center.lng);
+  return maxZoom !== null && view.value.zoom >= maxZoom + 4;
+});
 
 const model = computed<RenderModel | null>(() => {
   const b = build.value;
@@ -284,11 +307,23 @@ watch(
   }
 );
 
+// Only the tab that saved the pack announces it; other tabs pick it up silently
 watch(
-  [() => config.value.basemap, () => config.value.customTileUrl, appDark],
+  () => offlineMap.status,
+  (now, before) => {
+    if (now === "ready" && before === "saving") noty.success("Offline map saved").catch(() => undefined);
+  }
+);
+
+function applyBasemap() {
+  return renderer?.setBasemap(config.value.basemap, appDark.value, config.value.customTileUrl, offlineArchives());
+}
+
+watch(
+  [() => config.value.basemap, () => config.value.customTileUrl, appDark, () => offlineMap.world?.savedAt, () => offlineMap.detail?.savedAt],
   () => {
     tileWarning.value = false;
-    renderer?.setBasemap(config.value.basemap, appDark.value, config.value.customTileUrl);
+    applyBasemap();
   }
 );
 
@@ -533,7 +568,8 @@ async function initialize() {
     savedView = state.view;
     lastView = state.view;
   }
-  await renderer?.setBasemap(config.value.basemap, appDark.value, config.value.customTileUrl);
+  await loadOfflineMap();
+  await applyBasemap();
 
   const params = (ctx.params ?? {}) as Record<string, unknown>;
   const command = ctx.command;
@@ -592,8 +628,9 @@ onMounted(async () => {
   renderer = new MapRenderer(mapEl.value, {
     itemPopup,
     regionPopup,
-    onViewChange(center, zoom) {
-      lastView = { center, zoom };
+    onViewChange(center, z) {
+      lastView = { center, zoom: z };
+      view.value = { center, zoom: z };
       saveState();
     },
     onTileError() {
@@ -617,7 +654,16 @@ onBeforeUnmount(() => {
 });
 
 function useOffline() {
-  config.value.basemap = "offline";
+  config.value.basemap = offlineReady.value ? "offline-osm" : "offline";
+}
+
+function useOnlineBasemap() {
+  config.value.basemap = appDark.value ? "esri-dark-gray" : "esri-light-gray";
+}
+
+function closeOfflinePrompt() {
+  promptClosed.value = true;
+  if (config.value.basemap === "auto") dismissOfflinePrompt();
 }
 
 function rerunNotice() {
@@ -693,6 +739,8 @@ function rerunNotice() {
           </div>
         </div>
 
+        <OfflinePrompt v-if="showOfflinePrompt" @close="closeOfflinePrompt" />
+
         <!-- Empty / error states -->
         <div v-if="error" class="overlay no-export">
           <div class="card error">
@@ -758,7 +806,11 @@ function rerunNotice() {
       <span v-for="w in warnings" :key="w" class="warning" :title="w"><Icon name="warning" :size="13" /> {{ w }}</span>
       <span v-if="tileWarning" class="warning">
         <Icon name="warning" :size="13" /> Map tiles aren't loading.
-        <button class="link" @click="useOffline">Use the offline basemap</button>
+        <button class="link" @click="useOffline">Use the offline {{ offlineReady ? "map" : "outlines" }}</button>
+      </span>
+      <span v-if="offlineTooCoarse" class="muted">
+        The offline map has little detail at this zoom.
+        <button class="link" @click="useOnlineBasemap">Use an online basemap</button>
       </span>
     </div>
   </div>

@@ -78,14 +78,19 @@ export const TILE_BASEMAPS: TileBasemap[] = [
 
 export const BASEMAP_OPTIONS: { id: BasemapId; label: string }[] = [
   { id: "auto", label: "Match app theme" },
+  { id: "offline-osm", label: "Offline map (OpenStreetMap)" },
   ...TILE_BASEMAPS.map(({ id, label }) => ({ id, label })),
-  { id: "offline", label: "Offline (country outlines)" },
+  { id: "offline", label: "Country outlines (built in)" },
   { id: "custom", label: "Custom tile URL…" },
 ];
 
-/** Resolve "auto" against the app theme. */
-export function resolveBasemap(id: BasemapId, dark: boolean): BasemapId {
-  if (id === "auto") return dark ? "esri-dark-gray" : "esri-light-gray";
+/**
+ * Resolve "auto" against the app theme: the downloaded offline map when there is one, otherwise
+ * Esri's gray canvases. The offline map falls back to the built-in outlines until it's downloaded.
+ */
+export function resolveBasemap(id: BasemapId, dark: boolean, offlineReady = false): BasemapId {
+  if (id === "auto") return offlineReady ? "offline-osm" : dark ? "esri-dark-gray" : "esri-light-gray";
+  if (id === "offline-osm" && !offlineReady) return "offline";
   return id;
 }
 
@@ -94,9 +99,9 @@ export function tileBasemap(id: BasemapId): TileBasemap | undefined {
 }
 
 /** Whether marks sit on a dark background (affects ramps and outlines). */
-export function basemapIsDark(id: BasemapId, appDark: boolean): boolean {
-  const resolved = resolveBasemap(id, appDark);
-  if (resolved === "offline" || resolved === "custom") return appDark;
+export function basemapIsDark(id: BasemapId, appDark: boolean, offlineReady = false): boolean {
+  const resolved = resolveBasemap(id, appDark, offlineReady);
+  if (resolved === "offline" || resolved === "offline-osm" || resolved === "custom") return appDark;
   return !!tileBasemap(resolved)?.dark;
 }
 

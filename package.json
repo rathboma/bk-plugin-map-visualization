@@ -16,7 +16,8 @@
     "typecheck": "vue-tsc -b",
     "test": "vitest",
     "test:run": "vitest run",
-    "geodata": "node scripts/build-geodata.mjs"
+    "geodata": "node scripts/build-geodata.mjs",
+    "basemap": "node scripts/build-basemap.mjs"
   },
   "dependencies": {
     "@beekeeperstudio/plugin": "^1.7.1",
@@ -24,6 +25,8 @@
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",
     "leaflet.markercluster": "^1.5.3",
+    "pmtiles": "^3.2.1",
+    "protomaps-leaflet": "^5.1.0",
     "topojson-client": "^3.1.0",
     "vue": "^3.5.22"
   },
