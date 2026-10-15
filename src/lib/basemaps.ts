@@ -76,12 +76,25 @@ export const TILE_BASEMAPS: TileBasemap[] = [
   },
 ];
 
-export const BASEMAP_OPTIONS: { id: BasemapId; label: string }[] = [
-  { id: "auto", label: "Match app theme" },
-  { id: "offline-osm", label: "Offline map (OpenStreetMap)" },
-  ...TILE_BASEMAPS.map(({ id, label }) => ({ id, label })),
-  { id: "offline", label: "Country outlines (built in)" },
-  { id: "custom", label: "Custom tile URL…" },
+export interface BasemapOption {
+  id: BasemapId;
+  label: string;
+}
+
+/** The basemap picker, split by whether the map ships with the plugin or downloads tiles. */
+export const BASEMAP_GROUPS: { label: string; options: BasemapOption[] }[] = [
+  {
+    label: "Built in · works offline",
+    options: [
+      { id: "auto", label: "Match app theme" },
+      { id: "offline-osm", label: "Offline map (OpenStreetMap)" },
+      { id: "offline", label: "Country outlines" },
+    ],
+  },
+  {
+    label: "Online · needs internet",
+    options: [...TILE_BASEMAPS.map(({ id, label }) => ({ id, label })), { id: "custom", label: "Custom tile URL…" }],
+  },
 ];
 
 /**
@@ -108,4 +121,25 @@ export function basemapIsDark(id: BasemapId, appDark: boolean, offlineReady = fa
 /** Only allow http(s) XYZ templates for custom tiles. */
 export function isValidTileUrl(url: string): boolean {
   return /^https?:\/\/[^\s]+$/i.test(url) && url.includes("{z}") && url.includes("{x}") && url.includes("{y}");
+}
+
+/** Host a tile URL template downloads from ("{s}." subdomain placeholders dropped). */
+export function tileHost(url: string): string | null {
+  const host = /^https?:\/\/([^/?#]+)/i.exec(url)?.[1];
+  return host ? host.replace(/^\{s\}\./i, "") : null;
+}
+
+/** Whether the basemap that will actually be drawn needs the network, and where its tiles come from. */
+export function basemapSource(id: BasemapId, customUrl: string, offlineReady = false): { online: boolean; text: string } {
+  // "auto" uses Esri's canvases when the bundled map couldn't be loaded
+  const resolved = resolveBasemap(id, false, offlineReady);
+  if (resolved === "offline" || resolved === "offline-osm") {
+    return { online: false, text: "Works without an internet connection." };
+  }
+  const url = resolved === "custom" ? (isValidTileUrl(customUrl) ? customUrl : "") : (tileBasemap(resolved)?.url ?? "");
+  const host = tileHost(url);
+  return {
+    online: true,
+    text: host ? `Downloads tiles from ${host}; needs an internet connection.` : "Downloads tiles from the internet.",
+  };
 }

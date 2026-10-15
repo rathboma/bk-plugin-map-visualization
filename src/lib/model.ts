@@ -107,7 +107,10 @@ function compareValues(a: unknown, b: unknown): number {
 const scaleSuffix = (s: string) => (s === "linear" ? "" : ` (${s === "sqrt" ? "square root" : s})`);
 
 export function buildRenderModel(ds: Dataset, allItems: PlotItem[], config: MapConfig, dark: boolean): RenderModel {
-  const { style, location } = config;
+  // Copy every setting up front: the closures below read some of them only while drawing, which a
+  // reactive caller (App's computed model) wouldn't track, so e.g. the size slider wouldn't redraw
+  const style = { ...config.style };
+  const { location } = config;
   const layer = style.layer;
   const legend: Legend = {};
   const cell = (item: PlotItem, ci: number) => (ci >= 0 ? ds.rows[item.row][ci] : undefined);

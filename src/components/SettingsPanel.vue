@@ -8,10 +8,11 @@ import {
   type LocationMode,
   type MapConfig,
 } from "../lib/config";
-import { BASEMAP_OPTIONS, isValidTileUrl } from "../lib/basemaps";
+import { BASEMAP_GROUPS, basemapSource, isValidTileUrl } from "../lib/basemaps";
 import { defaultMarkColor } from "../lib/color";
 import { importPackFile, offlineMap, removeDetail } from "../lib/offlineMap";
 import { formatBytes } from "../lib/pack";
+import ColorPicker from "./ColorPicker.vue";
 
 const config = defineModel<MapConfig>({ required: true });
 
@@ -57,6 +58,7 @@ function setMode(mode: LocationMode) {
 }
 
 const showOffline = computed(() => ["auto", "offline-osm"].includes(config.value.basemap));
+const source = computed(() => basemapSource(config.value.basemap, config.value.customTileUrl, !!offlineMap.world || !!offlineMap.detail));
 const fileInput = ref<HTMLInputElement | null>(null);
 
 async function onPackFile(e: Event) {
@@ -356,10 +358,10 @@ const customUrlInvalid = computed(
               <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
             </select>
           </label>
-          <label v-if="!colorIsColumn && !(layer === 'path' && style.groupColumn)" class="field narrow">
+          <div v-if="!colorIsColumn && !(layer === 'path' && style.groupColumn)" class="field narrow">
             <span>Color</span>
-            <input v-model="singleColor" type="color" />
-          </label>
+            <ColorPicker v-model="singleColor" :dark="dark" label="Mark color" />
+          </div>
         </div>
         <div v-if="colorIsNumeric" class="row">
           <label class="field">
@@ -423,9 +425,15 @@ const customUrlInvalid = computed(
       <header><h3>Basemap</h3></header>
       <label class="field">
         <select v-model="config.basemap">
-          <option v-for="b in BASEMAP_OPTIONS" :key="b.id" :value="b.id">{{ b.label }}</option>
+          <optgroup v-for="g in BASEMAP_GROUPS" :key="g.label" :label="g.label">
+            <option v-for="b in g.options" :key="b.id" :value="b.id">{{ b.label }}</option>
+          </optgroup>
         </select>
       </label>
+      <p class="hint source">
+        <span class="badge" :class="{ online: source.online }">{{ source.online ? "Online" : "Offline" }}</span>
+        {{ source.text }}
+      </p>
       <template v-if="config.basemap === 'custom'">
         <label class="field">
           <span>Tile URL template</span>
@@ -433,7 +441,6 @@ const customUrlInvalid = computed(
         </label>
         <p v-if="customUrlInvalid" class="hint warn">Needs an http(s) URL containing {z}, {x} and {y}.</p>
       </template>
-      <p v-if="config.basemap === 'offline'" class="hint">Works without network access.</p>
 
       <div v-if="showOffline" class="offline">
         <span class="offline-title">
@@ -538,6 +545,23 @@ h3 {
 }
 .hint.warn {
   color: var(--brand-warning);
+}
+.source .badge {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.source .badge.online {
+  color: var(--text);
+  background: var(--active);
 }
 .offline {
   margin-top: 12px;

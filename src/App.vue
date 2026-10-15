@@ -309,11 +309,11 @@ watch(
   }
 );
 
-// Changing the colour column resets legend filters
+// Changing the colour column resets legend filters (but restoring a saved tab sets it too, and keeps them)
 watch(
   () => config.value.style.colorColumn,
   () => {
-    if (config.value.hiddenCategories.length) config.value.hiddenCategories = [];
+    if (initialized.value && config.value.hiddenCategories.length) config.value.hiddenCategories = [];
   }
 );
 

@@ -152,15 +152,6 @@ input[type="checkbox"] {
   accent-color: var(--accent);
   margin: 0;
 }
-input[type="color"] {
-  width: 28px;
-  height: 28px;
-  padding: 2px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  background: var(--surface);
-  cursor: pointer;
-}
 
 /* ---- Leaflet overrides ---- */
 .leaflet-container {
@@ -177,11 +168,19 @@ input[type="color"] {
 .leaflet-container.offline-basemap {
   background: color-mix(in srgb, var(--theme-secondary) 10%, var(--theme-bg));
 }
+/* Leaflet's own hover, focus and disabled styles are light gray boxes, which glare on dark themes */
 .leaflet-bar a,
-.leaflet-bar a:hover {
+.leaflet-bar a:focus,
+.leaflet-bar a.leaflet-disabled {
   background: var(--menu-bg);
   color: var(--text-dark);
   border-bottom-color: var(--border-color);
+}
+.leaflet-bar a:not(.leaflet-disabled):hover {
+  background: color-mix(in srgb, var(--menu-bg) 90%, var(--theme-base));
+}
+.leaflet-bar a.leaflet-disabled {
+  color: var(--text-hint);
 }
 .leaflet-bar {
   border: none !important;
