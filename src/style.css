@@ -152,15 +152,6 @@ input[type="checkbox"] {
   accent-color: var(--accent);
   margin: 0;
 }
-input[type="color"] {
-  width: 28px;
-  height: 28px;
-  padding: 2px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  background: var(--surface);
-  cursor: pointer;
-}
 
 /* ---- Leaflet overrides ---- */
 .leaflet-container {

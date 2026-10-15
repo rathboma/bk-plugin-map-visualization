@@ -120,6 +120,45 @@ export function defaultMarkColor(dark: boolean): string {
   return categoricalPalette(dark)[0];
 }
 
+// ---------------------------------------------------------------------------
+// Colour picker helpers
+
+export interface Hsv {
+  /** 0..360 */
+  h: number;
+  /** 0..1 */
+  s: number;
+  /** 0..1 */
+  v: number;
+}
+
+export function hexToHsv(hex: string): Hsv {
+  const [r, g, b] = hexToRgb(hex).map((c) => c / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  let h = 0;
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+  }
+  return { h: (h * 60 + 360) % 360, s: max === 0 ? 0 : d / max, v: max };
+}
+
+export function hsvToHex({ h, s, v }: Hsv): string {
+  const f = (n: number) => {
+    const k = (n + h / 60) % 6;
+    return 255 * (v - v * s * Math.max(0, Math.min(k, 4 - k, 1)));
+  };
+  return rgbToHex([f(5), f(3), f(1)]);
+}
+
+/** "#abc", "abc" or "#aabbcc" as a lowercase "#aabbcc", or null if it isn't a hex colour. */
+export function normalizeHex(text: string): string | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text.trim());
+  return m ? rgbToHex(hexToRgb(m[1])) : null;
+}
+
 /** Black or white text, whichever reads better on `bg`. */
 export function textOn(bg: string): string {
   const [L] = hexToOklab(bg);

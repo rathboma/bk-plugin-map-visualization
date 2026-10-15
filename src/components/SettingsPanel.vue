@@ -12,6 +12,7 @@ import { BASEMAP_OPTIONS, isValidTileUrl } from "../lib/basemaps";
 import { defaultMarkColor } from "../lib/color";
 import { importPackFile, offlineMap, removeDetail } from "../lib/offlineMap";
 import { formatBytes } from "../lib/pack";
+import ColorPicker from "./ColorPicker.vue";
 
 const config = defineModel<MapConfig>({ required: true });
 
@@ -356,10 +357,10 @@ const customUrlInvalid = computed(
               <option v-for="c in columns" :key="c" :value="c">{{ c }}</option>
             </select>
           </label>
-          <label v-if="!colorIsColumn && !(layer === 'path' && style.groupColumn)" class="field narrow">
+          <div v-if="!colorIsColumn && !(layer === 'path' && style.groupColumn)" class="field narrow">
             <span>Color</span>
-            <input v-model="singleColor" type="color" />
-          </label>
+            <ColorPicker v-model="singleColor" :dark="dark" label="Mark color" />
+          </div>
         </div>
         <div v-if="colorIsNumeric" class="row">
           <label class="field">
