@@ -150,6 +150,7 @@ export class MapRenderer {
   private model: RenderModel | null = null;
   /** The points layer's markers in draw order, for restyling them in place */
   private points: PointMarker[] | null = null;
+  private popup: L.Popup | null = null;
 
   constructor(private el: HTMLElement, private cb: RendererCallbacks) {
     this.map = L.map(el, {
@@ -176,6 +177,8 @@ export class MapRenderer {
 
   invalidateSize() {
     this.map.invalidateSize();
+    // Keep an open row popup in view when the map shrinks, e.g. when the result table opens below it
+    if (this.popup?.isOpen()) this.popup.update();
   }
 
   // ---------------------------------------------------------------------------
@@ -415,7 +418,7 @@ export class MapRenderer {
       if (!item && !region) return;
       this.hoverTip.close();
       const el = region ? this.cb.regionPopup(region) : this.cb.itemPopup(item!);
-      L.popup({ maxWidth: 440, minWidth: 220, maxHeight: 340, autoPanPadding: [24, 24], className: "row-popup" })
+      this.popup = L.popup({ maxWidth: 440, minWidth: 220, maxHeight: 340, autoPanPadding: [24, 24], className: "row-popup" })
         .setLatLng(e.latlng)
         .setContent(el)
         .openOn(this.map);
