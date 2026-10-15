@@ -109,6 +109,11 @@ describe("detection", () => {
     expect(suggestConfig(z)!.location).toMatchObject({ mode: "zip", column: "zip" });
     const c = ds(["city", "country"], [["Paris", "France"], ["Berlin", "Germany"]]);
     expect(suggestConfig(c)!.location).toMatchObject({ mode: "city", column: "city", countryColumn: "country" });
+    // Five-digit postcodes outside the US aren't ZIP codes
+    const intl = ds(["city", "country", "zip"], [["Paris", "France", "75001"], ["Berlin", "Germany", "10115"], ["Austin", "US", "78701"]]);
+    expect(suggestConfig(intl)!.location).toMatchObject({ mode: "city", column: "city" });
+    const us = ds(["city", "country", "zip"], [["Boston", "US", "02134"], ["Austin", "USA", "78701"]]);
+    expect(suggestConfig(us)!.location).toMatchObject({ mode: "zip", column: "zip" });
   });
 
   it("returns null when nothing looks like a location", () => {
@@ -122,6 +127,22 @@ describe("detection", () => {
     const merged = applySuggestion(base, s);
     expect(merged.style.radius).toBe(12);
     expect(merged.location.latColumn).toBe("latitude");
+  });
+
+  it("applySuggestion swaps out a layer the new locations can't draw", () => {
+    const regions = defaultConfig();
+    regions.style.layer = "regions";
+    expect(applySuggestion(regions, suggestConfig(cities)!).style.layer).toBe("points");
+    const zips = ds(["zip"], [["02134"], ["10001"]]);
+    expect(applySuggestion(regions, suggestConfig(zips)!).style.layer).toBe("points");
+
+    const lines = defaultConfig();
+    lines.style.layer = "lines";
+    expect(applySuggestion(lines, suggestConfig(cities)!).style.layer).toBe("points");
+
+    const heat = defaultConfig();
+    heat.style.layer = "heatmap";
+    expect(applySuggestion(heat, suggestConfig(cities)!).style.layer).toBe("heatmap");
   });
 });
 

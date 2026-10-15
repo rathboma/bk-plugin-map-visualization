@@ -3,7 +3,7 @@ import { parseCoordinate, parseLocationValue, parseNumber, isMercatorRange } fro
 import { lookupCountry, lookupState } from "./geo/regions";
 import { isGeohash } from "./geo/geohash";
 import { normalizeZip } from "./geo/geocode";
-import { defaultConfig, type LocationConfig, type MapConfig, type StyleConfig } from "./config";
+import { defaultConfig, layersFor, type LocationConfig, type MapConfig, type StyleConfig } from "./config";
 
 export interface ColumnProfile {
   name: string;
@@ -20,6 +20,8 @@ export interface ColumnProfile {
   /** Values that parse as a single-cell location (WKT, WKB, GeoJSON, "lat,lng", objects) */
   location: number;
   country: number;
+  /** Values naming the United States (for telling US ZIP codes from other 5-digit postal codes) */
+  usCountry: number;
   usState: number;
   zip: number;
   geohash: number;
@@ -53,6 +55,7 @@ export function profileColumns(ds: Dataset): ColumnProfile[] {
       inLngRange: 0,
       location: 0,
       country: 0,
+      usCountry: 0,
       usState: 0,
       zip: 0,
       geohash: 0,
@@ -82,7 +85,9 @@ export function profileColumns(ds: Dataset): ColumnProfile[] {
         if (parseLocationValue(v)) p.location++;
         if (typeof v === "string" && isGeohash(v) && v.length >= 4) p.geohash++;
       }
-      if (lookupCountry(v)) p.country++;
+      const country = lookupCountry(v);
+      if (country) p.country++;
+      if (country?.a2 === "US") p.usCountry++;
       if (lookupState(v)) p.usState++;
       if (normalizeZip(v) && (typeof v === "string" ? /^\s*\d{5}(-\d{4})?\s*$/.test(v) : true)) p.zip++;
     }
@@ -202,7 +207,10 @@ function pickLocation(profiles: ColumnProfile[]): { location: Partial<LocationCo
     };
   }
 
-  const zip = profiles.find((p) => ZIP_NAME.test(p.name) && strong(p, p.zip, 0.6));
+  // German, French, Spanish... postcodes are five digits too: with a country column, most rows must be in the US
+  const countryCol = profiles.find((p) => COUNTRY_NAME.test(p.name) && strong(p, p.country, 0.6));
+  const usOnly = !countryCol || frac(countryCol.usCountry, countryCol.country) >= 0.8;
+  const zip = usOnly ? profiles.find((p) => ZIP_NAME.test(p.name) && strong(p, p.zip, 0.6)) : undefined;
   if (zip) return { location: { mode: "zip", column: zip.name }, reason: `Detected US ZIP codes in "${zip.name}"` };
 
   // A named city column is more precise than any country/state column next to it
@@ -277,10 +285,12 @@ function pickStyle(profiles: ColumnProfile[], loc: Partial<LocationConfig>): Par
 /** Apply a suggestion on top of an existing config, keeping user style choices. */
 export function applySuggestion(config: MapConfig, s: Suggestion): MapConfig {
   const base = defaultConfig();
-  return {
-    ...config,
-    location: { ...base.location, ...s.location },
-    style: { ...config.style, ...s.style },
-    hiddenCategories: [],
-  };
+  const location = { ...base.location, ...s.location };
+  const style = { ...config.style, ...s.style };
+  // A layer kept from the previous result may not fit the new one (filled regions for lat/lng
+  // rows, lines without destination columns) and would draw nothing
+  const layers = layersFor(location.mode);
+  if (!layers.includes(style.layer)) style.layer = layers[0];
+  if (style.layer === "lines" && !(location.destLatColumn && location.destLngColumn)) style.layer = "points";
+  return { ...config, location, style, hiddenCategories: [] };
 }
