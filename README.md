@@ -166,7 +166,8 @@ yarn basemap world-z6.pmtiles basemaps/world.pmtiles
 
 ### Releasing
 
-Bump `version` in `manifest.json`, then push a matching tag (`git tag v1.0.0 && git push origin v1.0.0`).
+Run `bin/make-release.sh`. It suggests the next version from the existing tags, sets `version` in `manifest.json` and
+`package.json`, commits, and pushes a matching tag such as `v1.0.0`.
 The release workflow tests, builds and creates a draft GitHub release with `manifest.json` and the plugin zip.
 
 ## Data sources and licenses
