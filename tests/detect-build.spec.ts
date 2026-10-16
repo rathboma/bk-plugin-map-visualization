@@ -238,6 +238,20 @@ describe("host helpers", () => {
     expect(buildTableQuery({ name: "coll" }, "mongodb")).toBe("");
   });
 
+  it("applies the table view's filters", () => {
+    const where = `"country" = 'NZ'`;
+    expect(buildTableQuery({ name: "places" }, "postgresql", 10000, where)).toBe(
+      `SELECT * FROM "places" WHERE "country" = 'NZ' LIMIT 10000`,
+    );
+    expect(buildTableQuery({ name: "places" }, "sqlserver", 50, "[country] = 'NZ'")).toBe(
+      "SELECT TOP 50 * FROM [places] WHERE [country] = 'NZ'",
+    );
+    expect(buildTableQuery({ name: "PLACES" }, "oracle", 10, where)).toBe(
+      `SELECT * FROM "PLACES" WHERE "country" = 'NZ' FETCH FIRST 10 ROWS ONLY`,
+    );
+    expect(buildTableQuery({ name: "places" }, "postgresql", 10, "  ")).toBe('SELECT * FROM "places" LIMIT 10');
+  });
+
   it("prefers the selected text from the editor", () => {
     expect(queryFromEditorParams({ text: "a; b", selectedQuery: "select 1;", selectedText: "" })).toBe("select 1");
     expect(queryFromEditorParams({ text: "select 2", selectedText: "select 3" })).toBe("select 3");
