@@ -6,7 +6,7 @@
     "url": "https://github.com/rathboma"
   },
   "description": "Plot query results on an interactive map: points, bubbles, numbered markers, heatmaps, clusters, paths and filled regions.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "icon": "map",
   "manifestVersion": 1,
   "minAppVersion": "5.5.0",
