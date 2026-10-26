@@ -565,8 +565,11 @@ async function initialize() {
 
   if (fromRange && state?.source !== "query") {
     source.value = "selection";
-    // Grid menus and the Visualize menu both send the rows as `activeRange`
-    const range = (params as Partial<CornerMenuParams | StatusbarMenuParams>).activeRange;
+    // Grid menus send the rows as `activeRange`, the Visualize menu as `target`
+    const range =
+      command === "plot-results"
+        ? (params as Partial<StatusbarMenuParams>).target
+        : (params as Partial<CornerMenuParams>).activeRange;
     if (range && range.columns?.length) {
       const ds = datasetFromRange(range);
       const origin = visualizeSource === "result" ? "the query result" : "the results grid";
