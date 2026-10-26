@@ -15,7 +15,10 @@ import {
   setTabTitle,
   setViewState,
   type AppTheme,
+  type CornerMenuParams,
+  type EntityMenuParams,
   type PluginViewContext,
+  type StatusbarMenuParams,
 } from "@beekeeperstudio/plugin";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import MapLegend from "./components/MapLegend.vue";
@@ -553,16 +556,17 @@ async function initialize() {
   await loadOfflineMap();
   await applyBasemap();
 
-  const params = (ctx.params ?? {}) as Record<string, unknown>;
+  const params = ctx.params ?? {};
   const command = ctx.command;
   // The Visualize menu sends either rows (a selection or a whole result), or
   // a table to query when nothing is selected in a table view
-  const visualizeSource = command === "plot-results" ? (params as { source?: string }).source : undefined;
+  const visualizeSource = command === "plot-results" ? (params as Partial<StatusbarMenuParams>).source : undefined;
   const fromRange = command === "plot-selection" || visualizeSource === "selection" || visualizeSource === "result";
 
   if (fromRange && state?.source !== "query") {
     source.value = "selection";
-    const range = (params as { activeRange?: Parameters<typeof datasetFromRange>[0] }).activeRange;
+    // Grid menus and the Visualize menu both send the rows as `activeRange`
+    const range = (params as Partial<CornerMenuParams | StatusbarMenuParams>).activeRange;
     if (range && range.columns?.length) {
       const ds = datasetFromRange(range);
       const origin = visualizeSource === "result" ? "the query result" : "the results grid";
@@ -590,7 +594,8 @@ async function initialize() {
       query.value = queryFromEditorParams(params);
       autoRun = !!query.value;
     } else if (command === "plot-table" || visualizeSource === "table") {
-      const { entity, where } = params as { entity?: { name: string; schema?: string }; where?: string };
+      // The sidebar sends the table; the Visualize menu also sends its filters
+      const { entity, where } = params as Partial<EntityMenuParams & StatusbarMenuParams>;
       if (entity?.name) {
         let dbType: string | undefined;
         try {

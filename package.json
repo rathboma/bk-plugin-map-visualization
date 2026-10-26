@@ -20,7 +20,7 @@
     "basemap": "node scripts/build-basemap.mjs"
   },
   "dependencies": {
-    "@beekeeperstudio/plugin": "^1.7.1",
+    "@beekeeperstudio/plugin": "^1.8.0",
     "html-to-image": "^1.11.13",
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",

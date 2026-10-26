@@ -1,3 +1,5 @@
+import type { EditorMenuParams } from "@beekeeperstudio/plugin";
+
 export const TABLE_ROW_LIMIT = 10000;
 
 type Dialect = "backtick" | "bracket" | "double";
@@ -62,7 +64,7 @@ export function buildTableQuery(
 /** Pick the query text passed from the editor context menu. */
 export function queryFromEditorParams(params: unknown): string {
   if (!params || typeof params !== "object") return "";
-  const p = params as { selectedText?: string; selectedQuery?: string; text?: string };
+  const p = params as Partial<EditorMenuParams>;
   return (p.selectedText?.trim() || p.selectedQuery?.trim() || p.text?.trim() || "").replace(/;\s*$/, "");
 }
 
