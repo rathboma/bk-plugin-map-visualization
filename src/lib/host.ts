@@ -1,3 +1,5 @@
+import type { EditorMenuParams } from "@beekeeperstudio/plugin";
+
 export const TABLE_ROW_LIMIT = 10000;
 
 type Dialect = "backtick" | "bracket" | "double";
@@ -28,8 +30,17 @@ export function quoteIdent(name: string, dbType?: string): string {
   }
 }
 
-/** A starter SELECT for "View on Map" on a table in the sidebar. */
-export function buildTableQuery(entity: { name: string; schema?: string }, dbType?: string, limit = TABLE_ROW_LIMIT): string {
+/**
+ * A starter SELECT for "View on Map" on a table in the sidebar, or the
+ * Visualize menu of a table view. `where` is the SQL condition for the
+ * table view's filters, as Beekeeper Studio sends it.
+ */
+export function buildTableQuery(
+  entity: { name: string; schema?: string },
+  dbType?: string,
+  limit = TABLE_ROW_LIMIT,
+  where = "",
+): string {
   if (dbType === "mongodb" || dbType === "redis") return "";
   let table: string;
   if (dbType === "bigquery") {
@@ -37,22 +48,23 @@ export function buildTableQuery(entity: { name: string; schema?: string }, dbTyp
   } else {
     table = entity.schema ? `${quoteIdent(entity.schema, dbType)}.${quoteIdent(entity.name, dbType)}` : quoteIdent(entity.name, dbType);
   }
+  const filter = where.trim() ? ` WHERE ${where.trim()}` : "";
   switch (dbType) {
     case "sqlserver":
-      return `SELECT TOP ${limit} * FROM ${table}`;
+      return `SELECT TOP ${limit} * FROM ${table}${filter}`;
     case "oracle":
-      return `SELECT * FROM ${table} FETCH FIRST ${limit} ROWS ONLY`;
+      return `SELECT * FROM ${table}${filter} FETCH FIRST ${limit} ROWS ONLY`;
     case "firebird":
-      return `SELECT FIRST ${limit} * FROM ${table}`;
+      return `SELECT FIRST ${limit} * FROM ${table}${filter}`;
     default:
-      return `SELECT * FROM ${table} LIMIT ${limit}`;
+      return `SELECT * FROM ${table}${filter} LIMIT ${limit}`;
   }
 }
 
 /** Pick the query text passed from the editor context menu. */
 export function queryFromEditorParams(params: unknown): string {
   if (!params || typeof params !== "object") return "";
-  const p = params as { selectedText?: string; selectedQuery?: string; text?: string };
+  const p = params as Partial<EditorMenuParams>;
   return (p.selectedText?.trim() || p.selectedQuery?.trim() || p.text?.trim() || "").replace(/;\s*$/, "");
 }
 

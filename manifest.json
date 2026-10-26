@@ -48,6 +48,12 @@
         "name": "View on Map",
         "view": "map-view",
         "placement": "entity.table.context"
+      },
+      {
+        "command": "plot-results",
+        "name": "Map",
+        "view": "map-view",
+        "placement": ["results.statusbar", "tableTable.statusbar"]
       }
     ]
   }

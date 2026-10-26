@@ -28,6 +28,8 @@ folder as described under [Development](#development).
 
 | Where | What happens |
 | --- | --- |
+| **Visualize → Map** in the status bar of a query result | Maps the selected cells, or the whole result when nothing is selected. No query is re-run. |
+| **Visualize → Map** in the status bar of a table view | Maps the selected cells. With nothing selected, runs `SELECT * … LIMIT 10000` against the table with the view's filters applied. |
 | Right-click the top-left corner (or a column header) of a results grid or table view → **Plot on Map** | Maps the selected cells. No query is re-run. |
 | Right-click in the query editor → **Plot Query on Map** | Runs the selected text (or the query under the cursor) and maps it. |
 | Right-click a table in the sidebar → **View on Map** | Runs `SELECT * … LIMIT 10000` against the table. |

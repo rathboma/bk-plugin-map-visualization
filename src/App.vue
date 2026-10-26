@@ -15,7 +15,10 @@ import {
   setTabTitle,
   setViewState,
   type AppTheme,
+  type CornerMenuParams,
+  type EntityMenuParams,
   type PluginViewContext,
+  type StatusbarMenuParams,
 } from "@beekeeperstudio/plugin";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import MapLegend from "./components/MapLegend.vue";
@@ -37,7 +40,7 @@ import { MapRenderer } from "./lib/renderer";
 import { basemapIsDark, resolveBasemap } from "./lib/basemaps";
 import { loadOfflineMap, offlineArchives, offlineMap } from "./lib/offlineMap";
 import { maxZoomAt } from "./lib/pack";
-import { buildTableQuery, isSafeToAutoRun, queryFromEditorParams } from "./lib/host";
+import { buildTableQuery, isSafeToAutoRun, queryFromEditorParams, TABLE_ROW_LIMIT } from "./lib/host";
 import { elementToPng, itemsToGeoJson, regionsToGeoJson } from "./lib/export";
 
 type SourceKind = "selection" | "query";
@@ -553,15 +556,24 @@ async function initialize() {
   await loadOfflineMap();
   await applyBasemap();
 
-  const params = (ctx.params ?? {}) as Record<string, unknown>;
+  const params = ctx.params ?? {};
   const command = ctx.command;
+  // The Visualize menu sends either rows (a selection or a whole result), or
+  // a table to query when nothing is selected in a table view
+  const visualizeSource = command === "plot-results" ? (params as Partial<StatusbarMenuParams>).source : undefined;
+  const fromRange = command === "plot-selection" || visualizeSource === "selection" || visualizeSource === "result";
 
-  if (command === "plot-selection" && state?.source !== "query") {
+  if (fromRange && state?.source !== "query") {
     source.value = "selection";
-    const range = (params as { activeRange?: Parameters<typeof datasetFromRange>[0] }).activeRange;
+    // Grid menus send the rows as `activeRange`, the Visualize menu as `target`
+    const range =
+      command === "plot-results"
+        ? (params as Partial<StatusbarMenuParams>).target
+        : (params as Partial<CornerMenuParams>).activeRange;
     if (range && range.columns?.length) {
       const ds = datasetFromRange(range);
-      selectionNote.value = `${ds.rows.length.toLocaleString()} row${ds.rows.length === 1 ? "" : "s"} × ${ds.columns.length} column${ds.columns.length === 1 ? "" : "s"} from the results grid`;
+      const origin = visualizeSource === "result" ? "the query result" : "the results grid";
+      selectionNote.value = `${ds.rows.length.toLocaleString()} row${ds.rows.length === 1 ? "" : "s"} × ${ds.columns.length} column${ds.columns.length === 1 ? "" : "s"} from ${origin}`;
       initialized.value = true;
       await setDataset(ds, { fit: !savedView });
       if (ds.columns.length === 1 && !build.value?.items.length) {
@@ -584,8 +596,9 @@ async function initialize() {
     if (command === "plot-query") {
       query.value = queryFromEditorParams(params);
       autoRun = !!query.value;
-    } else if (command === "plot-table") {
-      const entity = (params as { entity?: { name: string; schema?: string } }).entity;
+    } else if (command === "plot-table" || visualizeSource === "table") {
+      // The sidebar sends the table; the Visualize menu also sends its filters
+      const { entity, where } = params as Partial<EntityMenuParams & StatusbarMenuParams>;
       if (entity?.name) {
         let dbType: string | undefined;
         try {
@@ -593,7 +606,7 @@ async function initialize() {
         } catch {
           dbType = undefined;
         }
-        query.value = buildTableQuery(entity, dbType);
+        query.value = buildTableQuery(entity, dbType, TABLE_ROW_LIMIT, where ?? "");
         autoRun = !!query.value;
         setTabTitle(`Map: ${entity.name}`).catch(() => undefined);
       }
