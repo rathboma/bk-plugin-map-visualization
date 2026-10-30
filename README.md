@@ -111,13 +111,13 @@ it ran before and is a single read-only `SELECT`.
 
 ## Known issues
 
-Three Beekeeper Studio bugs affect this plugin in 6.1.5 and earlier; fixes are pending upstream:
+Three Beekeeper Studio bugs affect this plugin in 6.1.5 and earlier. They're fixed in Beekeeper Studio 6.2.0, so upgrade if you hit them:
 
 - In the Community edition, plugin tabs with a result panel (like this one) render only about 150px tall.
 - **Plot Query on Map** in the query editor's context menu does nothing (the host doesn't pass the query text).
 - **Copy image** fails with an error; **Save as PNG…** works.
 
-The other entry points work in the meantime.
+On older versions, the other entry points still work.
 
 ## Development
 
